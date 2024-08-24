@@ -149,7 +149,7 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
 
     return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt
 
-def e_step(Etrainer: Trainer, Mtrainer:Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings):
+def e_step(Etrainer: Trainer, Mtrainer:Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings, pseudo_labels_confidence):
     
 
     logger.info(f"Starting E-step\n")
@@ -202,15 +202,17 @@ def e_step(Etrainer: Trainer, Mtrainer:Trainer, gt_weight, data, pseudo_labels, 
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
         for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
             train_data_indices = train_data_indices.numpy()
+
             if args.dataset_name in double_way_dataset :
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times, batch_ps_confidence = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
                     train_data.edge_ids[train_data_indices], [pseudo_labels[0][train_data_indices],pseudo_labels[1][train_data_indices]], \
-                    [train_data.labels_time[0][train_data_indices], train_data.labels_time[1][train_data_indices]]
+                    [train_data.labels_time[0][train_data_indices], train_data.labels_time[1][train_data_indices]], pseudo_labels_confidence[train_data_indices]
             else :
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times, batch_ps_confidence = \
                 train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
-                train_data.edge_ids[train_data_indices], pseudo_labels[train_data_indices], train_data.labels_time[train_data_indices]
+                train_data.edge_ids[train_data_indices], pseudo_labels[train_data_indices], train_data.labels_time[train_data_indices], pseudo_labels_confidence[train_data_indices]
+
             if model_name in ['TGAT', 'CAWN', 'TCL']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
@@ -268,8 +270,11 @@ def e_step(Etrainer: Trainer, Mtrainer:Trainer, gt_weight, data, pseudo_labels, 
                 predicts = model[1](x=batch_src_node_embeddings)
                 labels = batch_labels.to(torch.long).to(predicts.device).squeeze(dim=-1) 
                 mask_gt = torch.from_numpy(batch_node_interact_times == batch_labels_times).to(torch.bool)
-
-            mask_ps = ~mask_gt
+            if args.use_confidence:
+                mask_ps = (batch_ps_confidence > args.confidence_threshold).to(torch.bool).squeeze(dim=-1) 
+                mask_ps &= ~mask_gt
+            else:
+                mask_ps = ~mask_gt
             predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
             predicts_ps, labels_ps = predicts[mask_ps], labels[mask_ps] 
             loss_gt = loss_func(input = predicts_gt, target = labels_gt)

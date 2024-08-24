@@ -112,8 +112,10 @@ if __name__ == "__main__":
         dst_node_embeddings = torch.zeros(num_interactions, num_node_features, device=args.device)
         if args.dataset_name in double_way_datasets:
             pseudo_labels = torch.zeros(num_interactions, 2, device=args.device)
+            pseudo_labels_confidence = []
         else:
             pseudo_labels = torch.zeros(num_interactions, 1, device=args.device)
+            pseudo_labels_confidence = []
 
         base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict ={}, {}, {}, {}, {}, {}
             #EM training
@@ -125,7 +127,7 @@ if __name__ == "__main__":
                                     full_neighbor_sampler=full_neighbor_sampler
                                     )
         
-        base_val_total_loss, base_val_metrics, base_test_total_loss, base_test_metrics = \
+        base_val_total_loss, base_val_metrics, base_test_total_loss, base_test_metrics, pseudo_labels_confidence = \
                         em_warmup(args=args,  
                                 data=data, 
                                 logger=logger, 
@@ -163,8 +165,9 @@ if __name__ == "__main__":
                 gt_weight = 1.0
             Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
                 e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                                src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
-            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
+                                src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_labels_confidence=pseudo_labels_confidence)
+            
+            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics, pseudo_labels_confidence = \
                 m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
                                 src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
             pseudo_labels = update_pseudo_labels(data=data, pseudo_labels=pseudo_labels)

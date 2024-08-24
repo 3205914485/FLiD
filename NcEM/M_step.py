@@ -248,6 +248,7 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
     # generating the pseudo labels for all time nodes
     model.eval()
     pseudo_labels_list = []
+    pseudo_labels_confidence = []
     logger.info("Loop through all events to generate pseudo labels\n ") 
     full_idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
     for batch_idx, full_data_indices in enumerate(full_idx_data_loader_tqdm):
@@ -272,29 +273,31 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
 
             else :
                 predicts = model(x=batch_src_node_embeddings)
-
-        binary_predicts = torch.argmax(predicts, dim=1).to(torch.long)
-        pseudo_labels_list.append(binary_predicts)
+        confidence = torch.softmax(predicts,dim=1)
+        confidence, binary_predicts = torch.max(confidence, dim=1)
+        pseudo_labels_list.append(binary_predicts.to(torch.long))
+        pseudo_labels_confidence.append(confidence)
         
+    new_labels_confidence = torch.cat(pseudo_labels_confidence, dim=0).detach().unsqueeze(dim=-1).to('cpu')
     new_labels = torch.cat(pseudo_labels_list, dim=0).detach().unsqueeze(dim=-1)
     pseudo_labels.copy_(new_labels)
-    return val_total_loss, val_metrics, test_total_loss, test_metrics
+    return val_total_loss, val_metrics, test_total_loss, test_metrics, new_labels_confidence
 
 def m_step(Etrainer, Mtrainer, data, args, logger, src_node_embeddings, dst_node_embeddings, pseudo_labels):
     logger.info("Starting M-step \n")
     save_model_name = f'ncem_{Etrainer.model_name}'
     save_model_folder = f"./saved_models/ncem/M/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
-    val_total_loss, val_metrics, test_total_loss, test_metrics = train_model_node_classification_withembeddings(
-                                                                  args=args, 
-                                                                  data=data, 
-                                                                  logger=logger,         
-                                                                  Etrainer=Etrainer,                                                         
-                                                                  Mtrainer=Mtrainer, 
-                                                                  train=True,
-                                                                  patience=args.mw_patience,
-                                                                  pseudo_labels=pseudo_labels,
-                                                                  save_model_folder=save_model_folder,
-                                                                  num_epochs=args.num_epochs_m_step,
-                                                                  src_node_embeddings=src_node_embeddings, 
-                                                                  dst_node_embeddings=dst_node_embeddings)
-    return val_total_loss, val_metrics, test_total_loss, test_metrics
+    val_total_loss, val_metrics, test_total_loss, test_metrics, pseudo_labels_confidence = \
+        train_model_node_classification_withembeddings(args=args, 
+                                                       data=data, 
+                                                       logger=logger,         
+                                                       Etrainer=Etrainer,                                                         
+                                                       Mtrainer=Mtrainer, 
+                                                       train=True,
+                                                       patience=args.mw_patience,
+                                                       pseudo_labels=pseudo_labels,
+                                                       save_model_folder=save_model_folder,
+                                                       num_epochs=args.num_epochs_m_step,
+                                                       src_node_embeddings=src_node_embeddings, 
+                                                       dst_node_embeddings=dst_node_embeddings)
+    return val_total_loss, val_metrics, test_total_loss, test_metrics, pseudo_labels_confidence
