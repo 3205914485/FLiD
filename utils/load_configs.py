@@ -432,8 +432,8 @@ def get_node_classification_em_args():
     parser.add_argument('--em_patience', type=int, default=10, help='patience specific for EM iters loop')    
     parser.add_argument('--patience', type=int, default=20, help='patience for early stopping')
     parser.add_argument('--num_em_iters', type=int, default=30, help='number of EM iters')
-    parser.add_argument('--num_epochs_e_step', type=int, default=1, help='number of epochs of E step')
-    parser.add_argument('--num_epochs_m_step', type=int, default=2, help='number of epochs of M step')
+    parser.add_argument('--num_epochs_e_step', type=int, default=50, help='number of epochs of E step')
+    parser.add_argument('--num_epochs_m_step', type=int, default=200, help='number of epochs of M step')
 
 
     # Model specific settings:
