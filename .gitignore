@@ -1,1 +1,7 @@
 processed_data/
+logs/
+process_data/
+saved_models/
+saved_results/
+nohup.md
+nohop.out
