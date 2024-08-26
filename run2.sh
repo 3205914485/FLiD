@@ -1,5 +1,5 @@
-python train_link_prediction.py\
+python train_node_classification.py\
     --dataset_name wikipedia\
-    --model_name TGN\
-    --gpu 3\
-    --num_epochs 100
+    --model_name TGAT\
+    --gpu 0\
+    --num_epochs 5

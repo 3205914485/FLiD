@@ -244,7 +244,7 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
                 predicts = model[1](x=batch_src_node_embeddings).squeeze(dim=-1).sigmoid()
                 labels = torch.from_numpy(batch_labels).float().to(predicts.device) 
 
-            mask = torch.from_numpy(batch_node_interact_times == batch_labels_times).to(torch.bool)
+            mask = torch.from_numpy(batch_node_interact_times == batch_node_interact_times).to(torch.bool)
             
             # 根据mask筛选出有效的预测和标签
             filtered_predicts = predicts[mask]
