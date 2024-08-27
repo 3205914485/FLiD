@@ -8,5 +8,4 @@ nohup.out
 __pycache__
 *.ipynb
 *.sh
-run_em.sh
 env/
