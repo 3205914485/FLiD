@@ -1,8 +1,8 @@
 python train_unified.py \
-    --prefix 0827_Un_tgn_wiki_03\
+    --prefix 0827_Un_tgn_red_01\
     --start_runs 0\
-    --end_runs 3\
-    --gpu 1\
+    --end_runs 1\
+    --gpu 0\
     --emodel_name TGN\
     --dataset_name reddit\
     --use_unified 1\
