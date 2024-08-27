@@ -6,6 +6,7 @@ saved_results/
 nohup.md
 nohup.out
 __pycache__
+check.ipynb
 env/env208
 env/env209
 run_baseline.sh
