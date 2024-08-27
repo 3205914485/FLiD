@@ -425,6 +425,7 @@ def get_node_classification_em_args():
     parser.add_argument('--mw_patience', type=int, default=50, help='patience specific for m_warmup')   
 
     # EM-Iter settings:
+    parser.add_argument('--use_unified', type=int, default=0, help='Whether use the unifed EM train')    
     parser.add_argument('--use_confidence', type=int, default=1, help='Whether use the confidence threshold for pseudo lables')
     parser.add_argument('--confidence_threshold', type=float, default=0.7, help='Threshold for pseudo labels confidence')
     parser.add_argument('--decoder', type=int, default=1, help='num_decoders for training')

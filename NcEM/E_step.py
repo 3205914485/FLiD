@@ -168,18 +168,23 @@ def e_step(Etrainer: Trainer, Mtrainer:Trainer, gt_weight, data, pseudo_labels, 
     # node_classifier = MLPClassifier(input_dim=172, dropout=args.dropout).to(args.device)
     if args.decoder == 1:
         node_classifier = Mtrainer.model[1]
+        model = nn.Sequential(dynamic_backbone, node_classifier)
+        if args.use_unified:
+            optimizer = create_optimizer(model=model, optimizer_name=args.optimizer, learning_rate=args.learning_rate, weight_decay=args.weight_decay)
+        else:
+            optimizer = Etrainer.optimizer
     else:
         node_classifier = Mtrainer.model[0]
-    model = nn.Sequential(dynamic_backbone, node_classifier)
-    if args.decoder ==1:
-        optimizer = Etrainer.optimizer
-    else:
+        model = nn.Sequential(dynamic_backbone, node_classifier)
         optimizer = create_optimizer(model=model, optimizer_name=args.optimizer, learning_rate=args.learning_rate, weight_decay=args.weight_decay)
-    
+   
     model_name = Etrainer.model_name
     loss_func = Etrainer.criterion
     save_model_name = f'ncem_{model_name}'
-    save_model_folder = f"./saved_models/ncem/E/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    if args.use_unified:
+        save_model_folder = f"./saved_models/ncem/E_unified/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    else:    
+        save_model_folder = f"./saved_models/ncem/E/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
     shutil.rmtree(save_model_folder, ignore_errors=True)
     os.makedirs(save_model_folder, exist_ok=True)
     early_stopping = EarlyStopping(patience=args.patience, save_model_folder=save_model_folder,

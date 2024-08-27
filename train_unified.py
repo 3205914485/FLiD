@@ -73,8 +73,7 @@ if __name__ == "__main__":
     }
 
 
-    Eval_metric_all_runs, Etest_metric_all_runs, Mval_metric_all_runs, Mtest_metric_all_runs= [], [], [], []
-
+    Eval_metric_all_runs, Etest_metric_all_runs= [], [],
     for run in range(args.start_runs,args.end_runs):
 
         set_random_seed(seed=run)
@@ -117,7 +116,7 @@ if __name__ == "__main__":
             pseudo_labels = torch.zeros(num_interactions, 1, device=args.device)
             pseudo_labels_confidence = []
 
-        base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict ={}, {}, {}, {}, {}, {}
+        base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict ={}, {}, {}, {}
             #EM training
         Etrainer, Mtrainer = em_init(args=args, 
                                     logger=logger,
@@ -137,7 +136,6 @@ if __name__ == "__main__":
                                 src_node_embeddings=src_node_embeddings, 
                                 dst_node_embeddings=dst_node_embeddings)
         pseudo_labels = update_pseudo_labels(data=data, pseudo_labels=pseudo_labels)
-        
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss, base_val_metrics, base_val_metric_dict, 'validate')
         log_and_save_metrics(logger, 'Warm-up base', base_test_total_loss, base_test_metrics, base_test_metric_dict, 'test')
@@ -149,78 +147,40 @@ if __name__ == "__main__":
             continue
 
         model_name = Etrainer.model_name
-        save_model_name = f'ncem_{model_name}'
-        save_model_folder = f"./saved_models/ncem/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
-        shutil.rmtree(save_model_folder, ignore_errors=True)
-        os.makedirs(save_model_folder, exist_ok=True)
-        early_stopping = EarlyStopping(patience=args.em_patience, save_model_folder=save_model_folder,
-                                            save_model_name=save_model_name, logger=logger, model_name=model_name)
-        
+
         IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict = {}, {}, {}, {}
-        best_test_all = 0.0
-        for k in range(args.num_em_iters):
-            logger.info(f'E-M Iter {k + 1} starts.\n')
-            if args.gt_weight !=1.0:
-                gt_weight = 0.5 + (args.gt_weight - 0.5) * np.exp(-0.1 * k)
-            else:
-                gt_weight = 1.0
-            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
-                e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                                src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_labels_confidence=pseudo_labels_confidence)
-            
-            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics, pseudo_labels_confidence = \
-                m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                                src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
-            pseudo_labels = update_pseudo_labels(data=data, pseudo_labels=pseudo_labels)
 
-            if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
-                log_and_save_metrics(logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')
-                log_and_save_metrics(logger, 'Mstep', Mval_total_loss, Mval_metrics, Mval_metric_dict, 'validate')
-            log_and_save_metrics(logger, 'Estep', Etest_total_loss, Etest_metrics, Etest_metric_dict, 'test')
-            log_and_save_metrics(logger, 'Mstep', Mtest_total_loss, Mtest_metrics, Mtest_metric_dict, 'test')
+        logger.info(f'E Unified train starts.\n')
+        gt_weight = 1.0
+        Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
+            e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+                            src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_labels_confidence=pseudo_labels_confidence)
+        if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+            log_and_save_metrics(logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')
+        log_and_save_metrics(logger, 'Estep', Etest_total_loss, Etest_metrics, Etest_metric_dict, 'test')
 
-            if list(Mtest_metrics.values())[0] > best_test_all:
-                best_test_all = list(Mtest_metrics.values())[0]
-                if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
-                    IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
-                IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
-            
-            logger.info(f'Best iter metrics: {best_test_all}')
-
-            test_metric_indicator = []
-            for metric_name in Mtest_metrics.keys():
-                test_metric_indicator.append((metric_name, Mtest_metrics[metric_name], True))
-            early_stop = early_stopping.step(test_metric_indicator, nn.Sequential(Etrainer.model, Mtrainer.model))
-
-            if early_stop[0]:
-                break
+        if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+            IterEval_metric_dict = Eval_metric_dict
+        IterEtest_metric_dict = Etest_metric_dict
 
         single_run_time = time.time() - run_start_time
         logger.info(f'Run {run + 1} cost {single_run_time:.2f} seconds.')
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
             Eval_metric_all_runs.append(IterEval_metric_dict)
-            Mval_metric_all_runs.append(IterMval_metric_dict)
         Etest_metric_all_runs.append(IterEtest_metric_dict)
-        Mtest_metric_all_runs.append(IterMtest_metric_dict)
 
         # avoid the overlap of logs
         if run < args.end_runs - 1:
             logger.removeHandler(fh)
             logger.removeHandler(ch)
-
-        # save model result
-        save_results(args, Etrainer, IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict)
-
     # store the average metrics at the log of the last run
     logger.info(f'metrics over {args.end_runs} runs:')
 
     if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
         log_average_metrics(logger, Eval_metric_all_runs, 'Estep validate')
-        log_average_metrics(logger, Mval_metric_all_runs, 'Mstep validate')
 
     log_average_metrics(logger, Etest_metric_all_runs, 'Estep test')
-    log_average_metrics(logger, Mtest_metric_all_runs, 'Mstep test')
 
     sys.exit()
 
