@@ -49,28 +49,35 @@ def edge_bank_time_window_memory(history_src_node_ids: np.ndarray, history_dst_n
     # get window start and end time to determine window size
     # fixed_proportion, which sets the time window size to the duration of test data ratio
     if time_window_mode == 'fixed_proportion':
-        time_window_start_time = np.quantile(history_node_interact_times, 1 - time_window_proportion)
+        time_window_start_time = np.quantile(
+            history_node_interact_times, 1 - time_window_proportion)
         time_window_end_time = max(history_node_interact_times)
     # repeat_interval, which sets the time window size to average time intervals of repeated edges
     elif time_window_mode == 'repeat_interval':
         edge_time_intervals = defaultdict(list)
         for history_src_node_id, history_dst_node_id, history_node_interact_time in \
                 zip(history_src_node_ids, history_dst_node_ids, history_node_interact_times):
-            edge_time_intervals[(history_src_node_id, history_dst_node_id)].append(history_node_interact_time)
+            edge_time_intervals[(history_src_node_id, history_dst_node_id)].append(
+                history_node_interact_time)
 
         sum_edge_time_intervals = 0
         for edge_tuple, edge_time_interval_list in edge_time_intervals.items():
             if len(edge_time_interval_list) > 1:
-                sum_edge_time_intervals += np.mean([edge_time_interval_list[i + 1] - edge_time_interval_list[i] for i in range(len(edge_time_interval_list) - 1)])
+                sum_edge_time_intervals += np.mean([edge_time_interval_list[i + 1] - edge_time_interval_list[i]
+                                                   for i in range(len(edge_time_interval_list) - 1)])
 
-        average_edge_time_intervals = sum_edge_time_intervals / len(edge_time_intervals)
+        average_edge_time_intervals = sum_edge_time_intervals / \
+            len(edge_time_intervals)
         time_window_end_time = max(history_node_interact_times)
         time_window_start_time = time_window_end_time - average_edge_time_intervals
     else:
-        raise ValueError(f'Not implemented error for time_window_mode {time_window_mode}!')
+        raise ValueError(
+            f'Not implemented error for time_window_mode {time_window_mode}!')
 
-    memory_mask = np.logical_and(history_node_interact_times <= time_window_end_time, history_node_interact_times >= time_window_start_time)
-    edge_memories = edge_bank_unlimited_memory(history_src_node_ids[memory_mask], history_dst_node_ids[memory_mask])
+    memory_mask = np.logical_and(history_node_interact_times <= time_window_end_time,
+                                 history_node_interact_times >= time_window_start_time)
+    edge_memories = edge_bank_unlimited_memory(
+        history_src_node_ids[memory_mask], history_dst_node_ids[memory_mask])
     return edge_memories
 
 
@@ -87,7 +94,8 @@ def edge_bank_repeat_threshold_memory(history_src_node_ids: np.ndarray, history_
         edge_frequencies[(history_src_node_id, history_dst_node_id)] += 1
     threshold = np.array(list(edge_frequencies.values())).mean()
 
-    edge_memories = set(edge_tuple for edge_tuple, edge_frequency in edge_frequencies.items() if edge_frequency >= threshold)
+    edge_memories = set(edge_tuple for edge_tuple, edge_frequency in edge_frequencies.items(
+    ) if edge_frequency >= threshold)
     return edge_memories
 
 
@@ -105,17 +113,22 @@ def edge_bank_link_prediction(history_data: Data, positive_edges: tuple, negativ
     """
 
     if edge_bank_memory_mode == 'unlimited_memory':
-        edge_memories = edge_bank_unlimited_memory(history_src_node_ids=history_data.src_node_ids, history_dst_node_ids=history_data.dst_node_ids)
+        edge_memories = edge_bank_unlimited_memory(
+            history_src_node_ids=history_data.src_node_ids, history_dst_node_ids=history_data.dst_node_ids)
     elif edge_bank_memory_mode == 'time_window_memory':
         edge_memories = edge_bank_time_window_memory(history_src_node_ids=history_data.src_node_ids, history_dst_node_ids=history_data.dst_node_ids,
                                                      history_node_interact_times=history_data.node_interact_times, time_window_mode=time_window_mode,
                                                      time_window_proportion=time_window_proportion)
     elif edge_bank_memory_mode == 'repeat_threshold_memory':
-        edge_memories = edge_bank_repeat_threshold_memory(history_src_node_ids=history_data.src_node_ids, history_dst_node_ids=history_data.dst_node_ids)
+        edge_memories = edge_bank_repeat_threshold_memory(
+            history_src_node_ids=history_data.src_node_ids, history_dst_node_ids=history_data.dst_node_ids)
     else:
-        raise ValueError(f'Not implemented error for edge_bank_memory_mode {edge_bank_memory_mode}!')
+        raise ValueError(
+            f'Not implemented error for edge_bank_memory_mode {edge_bank_memory_mode}!')
 
-    positive_probabilities = predict_link_probabilities(edge_memories=edge_memories, edges_tuple=positive_edges)
-    negative_probabilities = predict_link_probabilities(edge_memories=edge_memories, edges_tuple=negative_edges)
+    positive_probabilities = predict_link_probabilities(
+        edge_memories=edge_memories, edges_tuple=positive_edges)
+    negative_probabilities = predict_link_probabilities(
+        edge_memories=edge_memories, edges_tuple=negative_edges)
 
     return positive_probabilities, negative_probabilities

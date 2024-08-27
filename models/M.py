@@ -6,11 +6,12 @@ from models.modules import TimeEncoder
 from utils.utils import NeighborSampler
 from models.Message import Message
 
+
 class M(nn.Module):
 
     def __init__(self, node_raw_features: np.ndarray, edge_raw_features: np.ndarray, neighbor_sampler: NeighborSampler,
                  time_feat_dim: int, num_tokens: int, num_layers: int = 2, token_dim_expansion_factor: float = 0.5,
-                 module_type: str='te',dff: int = 172,encoders: int =2,
+                 module_type: str = 'te', dff: int = 172, encoders: int = 2,
                  channel_dim_expansion_factor: float = 4.0, dropout: float = 0.1, device: str = 'cpu'):
         """
         TCL model.
@@ -27,8 +28,10 @@ class M(nn.Module):
         """
         super(M, self).__init__()
 
-        self.node_raw_features = torch.from_numpy(node_raw_features.astype(np.float32)).to(device)
-        self.edge_raw_features = torch.from_numpy(edge_raw_features.astype(np.float32))
+        self.node_raw_features = torch.from_numpy(
+            node_raw_features.astype(np.float32)).to(device)
+        self.edge_raw_features = torch.from_numpy(
+            edge_raw_features.astype(np.float32))
 
         self.neighbor_sampler = neighbor_sampler
         self.node_feat_dim = self.node_raw_features.shape[1]
@@ -40,13 +43,16 @@ class M(nn.Module):
         self.channel_dim_expansion_factor = channel_dim_expansion_factor
         self.dropout = dropout
         self.device = device
-        self.event_dim=self.edge_feat_dim+self.node_feat_dim*2+self.time_feat_dim
+        self.event_dim = self.edge_feat_dim+self.node_feat_dim*2+self.time_feat_dim
 
-        self.message=Message(num_events=self.edge_raw_features.shape[0],device=self.device,updater='gru',message_funciton='te',dim_events=self.event_dim,dim_messages=256)
+        self.message = Message(num_events=self.edge_raw_features.shape[0], device=self.device,
+                               updater='gru', message_funciton='te', dim_events=self.event_dim, dim_messages=256)
         self.num_channels = 256
         # in M, the time encoding function is not trainable
-        self.time_encoder = TimeEncoder(time_dim=time_feat_dim, parameter_requires_grad=False)
-        self.projection_layer = nn.Linear(256+ time_feat_dim, self.num_channels)
+        self.time_encoder = TimeEncoder(
+            time_dim=time_feat_dim, parameter_requires_grad=False)
+        self.projection_layer = nn.Linear(
+            256 + time_feat_dim, self.num_channels)
 
         self.mlp_mixers = nn.ModuleList([
             MLPMixer(num_tokens=self.num_tokens, num_channels=self.num_channels,
@@ -55,9 +61,10 @@ class M(nn.Module):
             for _ in range(self.num_layers)
         ])
 
-        self.output_layer = nn.Linear(in_features=self.num_channels + self.node_feat_dim, out_features=self.node_feat_dim, bias=True)
+        self.output_layer = nn.Linear(
+            in_features=self.num_channels + self.node_feat_dim, out_features=self.node_feat_dim, bias=True)
 
-    def compute_src_dst_node_temporal_embeddings(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray,message_idx,
+    def compute_src_dst_node_temporal_embeddings(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray, message_idx,
                                                  node_interact_times: np.ndarray, num_neighbors: int = 20, time_gap: int = 2000):
         """
         compute source and destination node temporal embeddings
@@ -69,25 +76,28 @@ class M(nn.Module):
         :return:
         """
         # deal with the batch inside messages
-        message_idx=message_idx-1
-        self.raw_edge_fea=self.edge_raw_features[(torch.from_numpy(message_idx)).cpu()].to(self.device)
-        self.time_fea=self.time_encoder(timestamps=torch.from_numpy(node_interact_times[:, np.newaxis] - node_interact_times[0]).float().to(self.device))
-        #self.message_info=torch.cat([self.raw_edge_fea,self.time_fea.squeeze(1)],dim=1)
-        
-        self.message_info=torch.cat([self.node_raw_features[src_node_ids],self.node_raw_features[dst_node_ids],self.raw_edge_fea,self.time_fea.squeeze(1)],dim=1)
+        message_idx = message_idx-1
+        self.raw_edge_fea = self.edge_raw_features[(
+            torch.from_numpy(message_idx)).cpu()].to(self.device)
+        self.time_fea = self.time_encoder(timestamps=torch.from_numpy(
+            node_interact_times[:, np.newaxis] - node_interact_times[0]).float().to(self.device))
+        # self.message_info=torch.cat([self.raw_edge_fea,self.time_fea.squeeze(1)],dim=1)
 
-        self.message.update(self.message_info,message_idx)
+        self.message_info = torch.cat([self.node_raw_features[src_node_ids],
+                                      self.node_raw_features[dst_node_ids], self.raw_edge_fea, self.time_fea.squeeze(1)], dim=1)
+
+        self.message.update(self.message_info, message_idx)
 
         # Tensor, shape (batch_size, node_feat_dim)
-        src_node_embeddings = self.compute_node_temporal_embeddings(node_ids=src_node_ids, node_interact_times=node_interact_times,message_idx=message_idx,
+        src_node_embeddings = self.compute_node_temporal_embeddings(node_ids=src_node_ids, node_interact_times=node_interact_times, message_idx=message_idx,
                                                                     num_neighbors=num_neighbors, time_gap=time_gap)
         # Tensor, shape (batch_size, node_feat_dim)
-        dst_node_embeddings = self.compute_node_temporal_embeddings(node_ids=dst_node_ids, node_interact_times=node_interact_times,message_idx=message_idx,
+        dst_node_embeddings = self.compute_node_temporal_embeddings(node_ids=dst_node_ids, node_interact_times=node_interact_times, message_idx=message_idx,
                                                                     num_neighbors=num_neighbors, time_gap=time_gap)
 
         return src_node_embeddings, dst_node_embeddings
 
-    def compute_node_temporal_embeddings(self, node_ids: np.ndarray, node_interact_times: np.ndarray,message_idx,
+    def compute_node_temporal_embeddings(self, node_ids: np.ndarray, node_interact_times: np.ndarray, message_idx,
                                          num_neighbors: int = 20, time_gap: int = 2000):
         """
         given node ids node_ids, and the corresponding time node_interact_times, return the temporal embeddings of nodes in node_ids
@@ -108,15 +118,19 @@ class M(nn.Module):
                                                            num_neighbors=num_neighbors)
 
         # Tensor, shape (batch_size, num_neighbors, edge_feat_dim)
-        nodes_edge_raw_features = self.message.net[(torch.from_numpy(neighbor_edge_ids))]
+        nodes_edge_raw_features = self.message.net[(
+            torch.from_numpy(neighbor_edge_ids))]
         # Tensor, shape (batch_size, num_neighbors, time_feat_dim)
-        nodes_neighbor_time_features = self.time_encoder(timestamps=torch.from_numpy(node_interact_times[:, np.newaxis] - neighbor_times).float().to(self.device))
+        nodes_neighbor_time_features = self.time_encoder(timestamps=torch.from_numpy(
+            node_interact_times[:, np.newaxis] - neighbor_times).float().to(self.device))
 
         # ndarray, set the time features to all zeros for the padded timestamp
-        nodes_neighbor_time_features[torch.from_numpy(neighbor_node_ids == 0)] = 0.0
+        nodes_neighbor_time_features[torch.from_numpy(
+            neighbor_node_ids == 0)] = 0.0
 
         # Tensor, shape (batch_size, num_neighbors, edge_feat_dim + time_feat_dim)
-        combined_features = torch.cat([nodes_edge_raw_features, nodes_neighbor_time_features], dim=-1)
+        combined_features = torch.cat(
+            [nodes_edge_raw_features, nodes_neighbor_time_features], dim=-1)
         # Tensor, shape (batch_size, num_neighbors, num_channels)
         combined_features = self.projection_layer(combined_features)
 
@@ -135,25 +149,31 @@ class M(nn.Module):
                                                                                           num_neighbors=time_gap)
 
         # Tensor, shape (batch_size, time_gap, node_feat_dim)
-        nodes_time_gap_neighbor_node_raw_features = self.node_raw_features[torch.from_numpy(time_gap_neighbor_node_ids)]
+        nodes_time_gap_neighbor_node_raw_features = self.node_raw_features[torch.from_numpy(
+            time_gap_neighbor_node_ids)]
 
         # Tensor, shape (batch_size, time_gap)
-        valid_time_gap_neighbor_node_ids_mask = torch.from_numpy((time_gap_neighbor_node_ids > 0).astype(np.float32))
+        valid_time_gap_neighbor_node_ids_mask = torch.from_numpy(
+            (time_gap_neighbor_node_ids > 0).astype(np.float32))
         # note that if a node has no valid neighbor (whose valid_time_gap_neighbor_node_ids_mask are all zero), directly set the mask to -np.inf will make the
         # scores after softmax be nan. Therefore, we choose a very large negative number (-1e10) instead of -np.inf to tackle this case
         # Tensor, shape (batch_size, time_gap)
         valid_time_gap_neighbor_node_ids_mask[valid_time_gap_neighbor_node_ids_mask == 0] = -1e10
         # Tensor, shape (batch_size, time_gap)
-        scores = torch.softmax(valid_time_gap_neighbor_node_ids_mask, dim=1).to(self.device)
+        scores = torch.softmax(
+            valid_time_gap_neighbor_node_ids_mask, dim=1).to(self.device)
 
         # Tensor, shape (batch_size, node_feat_dim), average over the time_gap neighbors
-        nodes_time_gap_neighbor_node_agg_features = torch.mean(nodes_time_gap_neighbor_node_raw_features * scores.unsqueeze(dim=-1), dim=1)
+        nodes_time_gap_neighbor_node_agg_features = torch.mean(
+            nodes_time_gap_neighbor_node_raw_features * scores.unsqueeze(dim=-1), dim=1)
 
         # Tensor, shape (batch_size, node_feat_dim), add features of nodes in node_ids
-        output_node_features = nodes_time_gap_neighbor_node_agg_features + self.node_raw_features[torch.from_numpy(node_ids)]
+        output_node_features = nodes_time_gap_neighbor_node_agg_features + \
+            self.node_raw_features[torch.from_numpy(node_ids)]
 
         # Tensor, shape (batch_size, node_feat_dim)
-        node_embeddings = self.output_layer(torch.cat([combined_features, output_node_features], dim=1))
+        node_embeddings = self.output_layer(
+            torch.cat([combined_features, output_node_features], dim=1))
 
         return node_embeddings
 
@@ -187,7 +207,8 @@ class FeedForwardNet(nn.Module):
         self.ffn = nn.Sequential(nn.Linear(in_features=input_dim, out_features=int(dim_expansion_factor * input_dim)),
                                  nn.GELU(),
                                  nn.Dropout(dropout),
-                                 nn.Linear(in_features=int(dim_expansion_factor * input_dim), out_features=input_dim),
+                                 nn.Linear(in_features=int(
+                                     dim_expansion_factor * input_dim), out_features=input_dim),
                                  nn.Dropout(dropout))
 
     def forward(self, x: torch.Tensor):
@@ -244,5 +265,3 @@ class MLPMixer(nn.Module):
         output_tensor = hidden_tensor + output_tensor
 
         return output_tensor
-
-

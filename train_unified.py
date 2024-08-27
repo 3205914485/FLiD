@@ -32,31 +32,34 @@ from NcEM.utils import log_and_save_metrics, log_average_metrics, save_results, 
 
 cpu_num = 2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
-os.environ["MKL_NUM_THREADS"] = str(cpu_num) # noqa
+os.environ["MKL_NUM_THREADS"] = str(cpu_num)  # noqa
 torch.set_num_threads(cpu_num)
 
 if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
 
-    double_way_datasets = ['bot','bot22','taobao','yelp']
+    double_way_datasets = ['bot', 'bot22', 'taobao', 'yelp']
     # get arguments
     args = get_node_classification_em_args()
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, num_node_features = \
-        get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio, test_ratio=args.test_ratio, new_spilt=args.new_spilt)
-
-
+        get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
+                      test_ratio=args.test_ratio, new_spilt=args.new_spilt)
 
     # initialize validation and test neighbor sampler to retrieve temporal graph
     full_neighbor_sampler = get_neighbor_sampler(data=full_data, sample_neighbor_strategy=args.sample_neighbor_strategy,
                                                  time_scaling_factor=args.time_scaling_factor, seed=1)
 
     # get data loaders
-    full_idx_data_loader = get_idx_data_loader(indices_list=list(range(len(full_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
-    train_idx_data_loader = get_idx_data_loader(indices_list=list(range(len(train_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
-    val_idx_data_loader = get_idx_data_loader(indices_list=list(range(len(val_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
-    test_idx_data_loader = get_idx_data_loader(indices_list=list(range(len(test_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
+    full_idx_data_loader = get_idx_data_loader(indices_list=list(
+        range(len(full_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
+    train_idx_data_loader = get_idx_data_loader(indices_list=list(
+        range(len(train_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
+    val_idx_data_loader = get_idx_data_loader(indices_list=list(
+        range(len(val_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
+    test_idx_data_loader = get_idx_data_loader(indices_list=list(
+        range(len(test_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
 
     data = {
         "node_raw_features": node_raw_features,
@@ -72,9 +75,8 @@ if __name__ == "__main__":
         "test_idx_data_loader": test_idx_data_loader
     }
 
-
-    Eval_metric_all_runs, Etest_metric_all_runs= [], [],
-    for run in range(args.start_runs,args.end_runs):
+    Eval_metric_all_runs, Etest_metric_all_runs = [], [],
+    for run in range(args.start_runs, args.end_runs):
 
         set_random_seed(seed=run)
 
@@ -84,15 +86,18 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO)
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
-        os.makedirs(f"./logs/ncem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+        os.makedirs(
+            f"./logs/ncem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
-        fh = logging.FileHandler(f"./logs/ncem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+        fh = logging.FileHandler(
+            f"./logs/ncem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
         ch.setLevel(logging.WARNING)
         # create formatter and add it to the handlers
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         fh.setFormatter(formatter)
         ch.setFormatter(formatter)
         # add the handlers to logger
@@ -103,42 +108,49 @@ if __name__ == "__main__":
         logger.info(f"********** Run {run + 1} starts. **********")
 
         logger.info(f'configuration is {args}')
-        
+
         # NcEM strating:
 
-            # EM data:
-        src_node_embeddings = torch.zeros(num_interactions, num_node_features, device=args.device)
-        dst_node_embeddings = torch.zeros(num_interactions, num_node_features, device=args.device)
+        # EM data:
+        src_node_embeddings = torch.zeros(
+            num_interactions, num_node_features, device=args.device)
+        dst_node_embeddings = torch.zeros(
+            num_interactions, num_node_features, device=args.device)
         if args.dataset_name in double_way_datasets:
-            pseudo_labels = torch.zeros(num_interactions, 2, device=args.device)
+            pseudo_labels = torch.zeros(
+                num_interactions, 2, device=args.device)
             pseudo_labels_confidence = []
         else:
-            pseudo_labels = torch.zeros(num_interactions, 1, device=args.device)
+            pseudo_labels = torch.zeros(
+                num_interactions, 1, device=args.device)
             pseudo_labels_confidence = []
 
-        base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict ={}, {}, {}, {}
-            #EM training
-        Etrainer, Mtrainer = em_init(args=args, 
-                                    logger=logger,
-                                    train_data=train_data, 
-                                    node_raw_features=node_raw_features, 
-                                    edge_raw_features=edge_raw_features, 
-                                    full_neighbor_sampler=full_neighbor_sampler
-                                    )
-        
+        base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict = {}, {}, {}, {}
+        # EM training
+        Etrainer, Mtrainer = em_init(args=args,
+                                     logger=logger,
+                                     train_data=train_data,
+                                     node_raw_features=node_raw_features,
+                                     edge_raw_features=edge_raw_features,
+                                     full_neighbor_sampler=full_neighbor_sampler
+                                     )
+
         base_val_total_loss, base_val_metrics, base_test_total_loss, base_test_metrics, pseudo_labels_confidence = \
-                        em_warmup(args=args,  
-                                data=data, 
-                                logger=logger, 
-                                Etrainer=Etrainer, 
-                                Mtrainer=Mtrainer,
-                                pseudo_labels=pseudo_labels, 
-                                src_node_embeddings=src_node_embeddings, 
-                                dst_node_embeddings=dst_node_embeddings)
-        pseudo_labels = update_pseudo_labels(data=data, pseudo_labels=pseudo_labels)
+            em_warmup(args=args,
+                      data=data,
+                      logger=logger,
+                      Etrainer=Etrainer,
+                      Mtrainer=Mtrainer,
+                      pseudo_labels=pseudo_labels,
+                      src_node_embeddings=src_node_embeddings,
+                      dst_node_embeddings=dst_node_embeddings)
+        pseudo_labels = update_pseudo_labels(
+            data=data, pseudo_labels=pseudo_labels)
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
-            log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss, base_val_metrics, base_val_metric_dict, 'validate')
-        log_and_save_metrics(logger, 'Warm-up base', base_test_total_loss, base_test_metrics, base_test_metric_dict, 'test')
+            log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
+                                 base_val_metrics, base_val_metric_dict, 'validate')
+        log_and_save_metrics(logger, 'Warm-up base', base_test_total_loss,
+                             base_test_metrics, base_test_metric_dict, 'test')
 
         if args.warmup_e_train or args.warmup_m_train:
             if run < args.end_runs - 1:
@@ -154,10 +166,12 @@ if __name__ == "__main__":
         gt_weight = 1.0
         Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
             e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                            src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_labels_confidence=pseudo_labels_confidence)
+                   src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_labels_confidence=pseudo_labels_confidence)
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
-            log_and_save_metrics(logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')
-        log_and_save_metrics(logger, 'Estep', Etest_total_loss, Etest_metrics, Etest_metric_dict, 'test')
+            log_and_save_metrics(
+                logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')
+        log_and_save_metrics(logger, 'Estep', Etest_total_loss,
+                             Etest_metrics, Etest_metric_dict, 'test')
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
             IterEval_metric_dict = Eval_metric_dict
@@ -183,4 +197,3 @@ if __name__ == "__main__":
     log_average_metrics(logger, Etest_metric_all_runs, 'Estep test')
 
     sys.exit()
-

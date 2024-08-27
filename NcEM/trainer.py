@@ -12,45 +12,52 @@ import os
 from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes, create_optimizer
 from utils.EarlyStopping import EarlyStopping
 
+
 def get_optimizer(name, parameters, lr, weight_decay=0):
     if name == 'Adam':
-        optimizer = torch.optim.Adam(params=parameters, lr=lr, weight_decay=weight_decay)
+        optimizer = torch.optim.Adam(
+            params=parameters, lr=lr, weight_decay=weight_decay)
     elif name == 'SGD':
-        optimizer = torch.optim.SGD(params=parameters, lr=lr, weight_decay=weight_decay)
+        optimizer = torch.optim.SGD(
+            params=parameters, lr=lr, weight_decay=weight_decay)
     elif name == 'RMSprop':
-        optimizer = torch.optim.RMSprop(params=parameters, lr=lr, weight_decay=weight_decay)
+        optimizer = torch.optim.RMSprop(
+            params=parameters, lr=lr, weight_decay=weight_decay)
     else:
         raise ValueError(f"Wrong value for optimizer {name}!")
 
     return optimizer
 
+
 def change_lr(optimizer, new_lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = new_lr
 
+
 class Trainer(object):
-    def __init__(self, args, model, model_name,logger):
+    def __init__(self, args, model, model_name, logger):
         self.args = args
         self.model = model
         self.model_name = model_name
         self.criterion = nn.CrossEntropyLoss()
-        self.parameters = [p for p in self.model.parameters()]   
+        self.parameters = [p for p in self.model.parameters()]
         logger.info(f'model -> {model}')
         logger.info(f'model name: {model_name}, #parameters: {get_parameter_sizes(model) * 4} B, '
-                f'{get_parameter_sizes(model) * 4 / 1024} KB, {get_parameter_sizes(model) * 4 / 1024 / 1024} MB.')
+                    f'{get_parameter_sizes(model) * 4 / 1024} KB, {get_parameter_sizes(model) * 4 / 1024 / 1024} MB.')
         self.criterion.to(args.device)
-        self.optimizer = get_optimizer(self.args.optimizer, self.parameters, self.args.learning_rate, self.args.weight_decay)
-
+        self.optimizer = get_optimizer(
+            self.args.optimizer, self.parameters, self.args.learning_rate, self.args.weight_decay)
 
     def reset(self):
         self.model.reset()
-        self.optimizer = get_optimizer(self.args.optimizer, self.parameters, self.args.learning_rate, self.args.weight_decay)
+        self.optimizer = get_optimizer(
+            self.args.optimizer, self.parameters, self.args.learning_rate, self.args.weight_decay)
 
     def save(self, filename):
         params = {
-                'model': self.model.state_dict(),
-                'optim': self.optimizer.state_dict()
-                }
+            'model': self.model.state_dict(),
+            'optim': self.optimizer.state_dict()
+        }
         try:
             torch.save(params, filename)
         except BaseException:

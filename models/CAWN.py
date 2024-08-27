@@ -25,8 +25,10 @@ class CAWN(nn.Module):
         """
         super(CAWN, self).__init__()
 
-        self.node_raw_features = torch.from_numpy(node_raw_features.astype(np.float32)).to(device)
-        self.edge_raw_features = torch.from_numpy(edge_raw_features.astype(np.float32)).to(device)
+        self.node_raw_features = torch.from_numpy(
+            node_raw_features.astype(np.float32)).to(device)
+        self.edge_raw_features = torch.from_numpy(
+            edge_raw_features.astype(np.float32)).to(device)
 
         self.neighbor_sampler = neighbor_sampler
         self.node_feat_dim = self.node_raw_features.shape[1]
@@ -40,7 +42,8 @@ class CAWN(nn.Module):
 
         self.time_encoder = TimeEncoder(time_dim=time_feat_dim)
 
-        self.position_encoder = PositionEncoder(position_feat_dim=self.position_feat_dim, walk_length=self.walk_length, device=device)
+        self.position_encoder = PositionEncoder(
+            position_feat_dim=self.position_feat_dim, walk_length=self.walk_length, device=device)
 
         self.walk_encoder = WalkEncoder(input_dim=self.node_feat_dim + self.edge_feat_dim + self.time_feat_dim + self.position_feat_dim,
                                         position_feat_dim=self.position_feat_dim, output_dim=self.node_feat_dim, num_walk_heads=self.num_walk_heads, dropout=dropout)
@@ -94,7 +97,8 @@ class CAWN(nn.Module):
 
         # get raw features of nodes in the multi-hop graphs
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1, node_feat_dim)
-        neighbor_raw_features = self.node_raw_features[torch.from_numpy(nodes_neighbor_ids)]
+        neighbor_raw_features = self.node_raw_features[torch.from_numpy(
+            nodes_neighbor_ids)]
 
         # ndarray, shape (batch_size, num_neighbors ** self.walk_length), record the valid length of each walk
         walks_valid_lengths = (nodes_neighbor_ids != 0).sum(axis=-1)
@@ -104,7 +108,8 @@ class CAWN(nn.Module):
         assert (nodes_neighbor_times[:, :, 0] == node_interact_times.repeat(repeats=num_neighbors ** self.walk_length, axis=0).
                 reshape(len(node_interact_times), num_neighbors ** self.walk_length)).all()
         # ndarray, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1)
-        nodes_neighbor_delta_times = nodes_neighbor_times[:, :, 0][:, :, np.newaxis] - nodes_neighbor_times
+        nodes_neighbor_delta_times = nodes_neighbor_times[:,
+                                                          :, 0][:, :, np.newaxis] - nodes_neighbor_times
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1, time_feat_dim)
         neighbor_time_features = self.time_encoder(timestamps=torch.from_numpy(nodes_neighbor_delta_times).float().to(self.device).flatten(start_dim=1))\
             .reshape(nodes_neighbor_delta_times.shape[0], nodes_neighbor_delta_times.shape[1], nodes_neighbor_delta_times.shape[2], self.time_feat_dim)
@@ -114,11 +119,13 @@ class CAWN(nn.Module):
         # check that the edge ids of the target node is denoted by zeros
         assert (nodes_edge_ids[:, :, 0] == 0).all()
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1, edge_feat_dim)
-        edge_features = self.edge_raw_features[torch.from_numpy(nodes_edge_ids)]
+        edge_features = self.edge_raw_features[torch.from_numpy(
+            nodes_edge_ids)]
 
         # get position features of nodes in the multi-hop graphs
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1, position_feat_dim)
-        neighbor_position_features = self.position_encoder(nodes_neighbor_ids=nodes_neighbor_ids)
+        neighbor_position_features = self.position_encoder(
+            nodes_neighbor_ids=nodes_neighbor_ids)
 
         # encode the random walks by walk encoder
         # Tensor, shape (batch_size, self.output_dim)
@@ -142,23 +149,29 @@ class CAWN(nn.Module):
         # add the target node to the list to generate random walks in array-like format
         nodes_neighbor_ids = [node_ids[:, np.newaxis]] + nodes_neighbor_ids
         # follow the CAWN official implementation, the edge ids of the target node is denoted by zeros
-        nodes_edge_ids = [np.zeros((len(node_ids), 1)).astype(np.longlong)] + nodes_edge_ids
-        nodes_neighbor_times = [node_interact_times[:, np.newaxis]] + nodes_neighbor_times
+        nodes_edge_ids = [np.zeros((len(node_ids), 1)).astype(
+            np.longlong)] + nodes_edge_ids
+        nodes_neighbor_times = [
+            node_interact_times[:, np.newaxis]] + nodes_neighbor_times
 
         array_format_data_list = []
         for tree_format_data in [nodes_neighbor_ids, nodes_edge_ids, nodes_neighbor_times]:
             # num_last_hop_neighbors equals to num_neighbors ** self.walk_length
             batch_size, num_last_hop_neighbors, walk_length_plus_1, dtype = \
-                tree_format_data[0].shape[0], tree_format_data[-1].shape[-1], len(tree_format_data), tree_format_data[0].dtype
-            assert batch_size == len(node_ids) and num_last_hop_neighbors == num_neighbors ** self.walk_length and walk_length_plus_1 == self.walk_length + 1
+                tree_format_data[0].shape[0], tree_format_data[-1].shape[-1], len(
+                    tree_format_data), tree_format_data[0].dtype
+            assert batch_size == len(
+                node_ids) and num_last_hop_neighbors == num_neighbors ** self.walk_length and walk_length_plus_1 == self.walk_length + 1
             # record the information of random walks with num_last_hop_neighbors paths, where each path has length walk_length_plus_1 (include the target node)
             # ndarray, shape (batch_size, num_last_hop_neighbors, walk_length_plus_1)
-            array_format_data = np.empty((batch_size, num_last_hop_neighbors, walk_length_plus_1), dtype=dtype)
+            array_format_data = np.empty(
+                (batch_size, num_last_hop_neighbors, walk_length_plus_1), dtype=dtype)
             for hop_idx, hop_data in enumerate(tree_format_data):
                 assert (num_last_hop_neighbors % hop_data.shape[-1] == 0)
                 # pad the data at each hop to be the same shape with the last hop data (which has the most number of neighbors)
                 # repeat the traversed nodes in tree_format_data to get the aligned array-like format
-                array_format_data[:, :, hop_idx] = np.repeat(hop_data, repeats=num_last_hop_neighbors // hop_data.shape[-1], axis=1)
+                array_format_data[:, :, hop_idx] = np.repeat(
+                    hop_data, repeats=num_last_hop_neighbors // hop_data.shape[-1], axis=1)
             array_format_data_list.append(array_format_data)
         # three ndarrays with shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1)
         return array_format_data_list[0], array_format_data_list[1], array_format_data_list[2]
@@ -217,42 +230,56 @@ class PositionEncoder(nn.Module):
         # get the multi-hop information for each node
         for idx, (src_node_id, dst_node_id, node_interact_time) in enumerate(zip(src_node_ids, dst_node_ids, node_interact_times)):
             # src_node_neighbor_ids, list of ndarrays, each ndarray with shape (num_neighbors ** current_hop)
-            src_node_neighbor_ids = [src_nodes_single_hop_neighbor_ids[idx] for src_nodes_single_hop_neighbor_ids in src_nodes_neighbor_ids]
-            src_node_neighbor_times = [src_nodes_single_hop_neighbor_times[idx] for src_nodes_single_hop_neighbor_times in src_nodes_neighbor_times]
-            dst_node_neighbor_ids = [dst_nodes_single_hop_neighbor_ids[idx] for dst_nodes_single_hop_neighbor_ids in dst_nodes_neighbor_ids]
-            dst_node_neighbor_times = [dst_nodes_single_hop_neighbor_times[idx] for dst_nodes_single_hop_neighbor_times in dst_nodes_neighbor_times]
+            src_node_neighbor_ids = [src_nodes_single_hop_neighbor_ids[idx]
+                                     for src_nodes_single_hop_neighbor_ids in src_nodes_neighbor_ids]
+            src_node_neighbor_times = [src_nodes_single_hop_neighbor_times[idx]
+                                       for src_nodes_single_hop_neighbor_times in src_nodes_neighbor_times]
+            dst_node_neighbor_ids = [dst_nodes_single_hop_neighbor_ids[idx]
+                                     for dst_nodes_single_hop_neighbor_ids in dst_nodes_neighbor_ids]
+            dst_node_neighbor_times = [dst_nodes_single_hop_neighbor_times[idx]
+                                       for dst_nodes_single_hop_neighbor_times in dst_nodes_neighbor_times]
 
             # dictionary, {node_identity (key): ndarray with shape (2, self.walk_length + 1) (value)}
             # store the appearances of nodes in the multi-hop graphs that are generated by random walks starting from src_node_id and dst_node_id
             tmp_nodes_appearances = {}
             # add the information of src_node and dst_node to the lists
-            src_node_neighbor_ids, src_node_neighbor_times = [[src_node_id]] + src_node_neighbor_ids, [[node_interact_time]] + src_node_neighbor_times
-            dst_node_neighbor_ids, dst_node_neighbor_times = [[dst_node_id]] + dst_node_neighbor_ids, [[node_interact_time]] + dst_node_neighbor_times
+            src_node_neighbor_ids, src_node_neighbor_times = [
+                [src_node_id]] + src_node_neighbor_ids, [[node_interact_time]] + src_node_neighbor_times
+            dst_node_neighbor_ids, dst_node_neighbor_times = [
+                [dst_node_id]] + dst_node_neighbor_ids, [[node_interact_time]] + dst_node_neighbor_times
             for current_hop in range(self.walk_length + 1):
                 for src_node_neighbor_id, src_node_neighbor_time, dst_node_neighbor_id, dst_node_neighbor_time in \
                         zip(src_node_neighbor_ids[current_hop], src_node_neighbor_times[current_hop], dst_node_neighbor_ids[current_hop], dst_node_neighbor_times[current_hop]):
 
                     # follow the CAWN official implementation, use the batch index and node id to represent the node key
-                    src_node_key = '-'.join([str(idx), str(src_node_neighbor_id)])
-                    dst_node_key = '-'.join([str(idx), str(dst_node_neighbor_id)])
+                    src_node_key = '-'.join([str(idx),
+                                            str(src_node_neighbor_id)])
+                    dst_node_key = '-'.join([str(idx),
+                                            str(dst_node_neighbor_id)])
 
                     if src_node_key not in tmp_nodes_appearances:
                         # create a ndarray with shape (2, self.walk_length + 1) for the src node to record its appearances
-                        tmp_nodes_appearances[src_node_key] = np.zeros((2, self.walk_length + 1), dtype=np.float32)
+                        tmp_nodes_appearances[src_node_key] = np.zeros(
+                            (2, self.walk_length + 1), dtype=np.float32)
                     if dst_node_key not in tmp_nodes_appearances:
                         # create a ndarray with shape (2, self.walk_length + 1) for the dst node to record its appearances
-                        tmp_nodes_appearances[dst_node_key] = np.zeros((2, self.walk_length + 1), dtype=np.float32)
+                        tmp_nodes_appearances[dst_node_key] = np.zeros(
+                            (2, self.walk_length + 1), dtype=np.float32)
 
                     # count the appearances of each node in the multi-hop graphs that are generated by random walks starting from src_node_id and dst_node_id
                     # for each node, tmp_nodes_appearances[node_key][0, :] records the node appearances in the random walks starting from src_node_id
                     # while tmp_nodes_appearances[node_key][1, :] records the node appearances in the random walks starting from dst_node_id
                     # number of neighbors at the current hop
-                    num_current_hop_neighbors = len(src_node_neighbor_ids[current_hop])
+                    num_current_hop_neighbors = len(
+                        src_node_neighbor_ids[current_hop])
                     # convert into landing probabilities by normalizing with k hop sampling number
-                    tmp_nodes_appearances[src_node_key][0, current_hop] += 1 / num_current_hop_neighbors
-                    tmp_nodes_appearances[dst_node_key][1, current_hop] += 1 / num_current_hop_neighbors
+                    tmp_nodes_appearances[src_node_key][0,
+                                                        current_hop] += 1 / num_current_hop_neighbors
+                    tmp_nodes_appearances[dst_node_key][1,
+                                                        current_hop] += 1 / num_current_hop_neighbors
             # set the appearances of the padded node (with zero index) to zeros
-            tmp_nodes_appearances['-'.join([str(idx), str(0)])] = np.zeros((2, self.walk_length + 1), dtype=np.float32)
+            tmp_nodes_appearances['-'.join([str(idx), str(0)])] = np.zeros(
+                (2, self.walk_length + 1), dtype=np.float32)
             self.nodes_appearances.update(tmp_nodes_appearances)
 
     def forward(self, nodes_neighbor_ids: np.ndarray):
@@ -263,7 +290,8 @@ class PositionEncoder(nn.Module):
         return Torch.tensor: position features of shape [batch, k-hop-support-number, position_dim]
         """
         # batch_indices -> array([[[0, ..., 0,], ..., [0, ..., 0,]], [[1, ..., 1], ..., [1, ..., 1]] ..., [[batch - 1, ..., batch - 1], ..., [batch - 1, ..., batch - 1]]])
-        batch_indices = np.arange(nodes_neighbor_ids.shape[0]).repeat(nodes_neighbor_ids.shape[1] * nodes_neighbor_ids.shape[2]).reshape(nodes_neighbor_ids.shape)
+        batch_indices = np.arange(nodes_neighbor_ids.shape[0]).repeat(
+            nodes_neighbor_ids.shape[1] * nodes_neighbor_ids.shape[2]).reshape(nodes_neighbor_ids.shape)
 
         # list of string keys, shape (batch_size * (num_neighbors ** self.walk_length) * (self.walk_length + 1))
         batch_keys = ['-'.join([str(batch_indices[i][j][k]), str(nodes_neighbor_ids[i][j][k])])
@@ -272,17 +300,20 @@ class PositionEncoder(nn.Module):
         # unique_keys, ndarray, shape (num_unique_keys, )
         # inverse_indices, ndarray, shape (batch_size * (num_neighbors ** self.walk_length) * (self.walk_length + 1))
         # we can use unique_keys[inverse_indices] to reconstruct the original input
-        unique_keys, inverse_indices = np.unique(batch_keys, return_inverse=True)
+        unique_keys, inverse_indices = np.unique(
+            batch_keys, return_inverse=True)
         # self.nodes_appearances, dictionary, {node_identity (key): ndarray with shape (2, self.walk_length + 1) (value)}
         # unique_node_appearances, ndarray, shape (num_unique_keys, 2, self.walk_length + 1)
-        unique_node_appearances = np.array([self.nodes_appearances[unique_key] for unique_key in unique_keys])
+        unique_node_appearances = np.array(
+            [self.nodes_appearances[unique_key] for unique_key in unique_keys])
         # the appearances of nodes in nodes_neighbor_ids, ndarray, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1, 2, self.walk_length + 1)
         node_appearances = unique_node_appearances[inverse_indices, :].reshape(nodes_neighbor_ids.shape[0], nodes_neighbor_ids.shape[1],
                                                                                nodes_neighbor_ids.shape[2], 2, self.walk_length + 1)
 
         # encode the node appearances in the random walks by MLPs
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1, 2, position_feat_dim)
-        position_features = self.position_encode_layer(torch.Tensor(node_appearances).float().to(self.device))
+        position_features = self.position_encode_layer(
+            torch.Tensor(node_appearances).float().to(self.device))
         # add the position features of each node in random walks generated by src and dst nodes by summing over the second last dimension, Equation (6) in CAWN paper
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1, position_feat_dim)
         position_features = position_features.sum(dim=-2)
@@ -310,21 +341,27 @@ class WalkEncoder(nn.Module):
         self.dropout = dropout
         # make sure that the attention dimension can be divided by number of walk heads
         if self.attention_dim % self.num_walk_heads != 0:
-            self.attention_dim += (self.num_walk_heads - self.attention_dim % self.num_walk_heads)
+            self.attention_dim += (self.num_walk_heads -
+                                   self.attention_dim % self.num_walk_heads)
 
         # BiLSTM Encoders, encode the node features along each random walk
-        self.feature_encoder = BiLSTMEncoder(input_dim=self.input_dim, hidden_dim=self.input_dim)
+        self.feature_encoder = BiLSTMEncoder(
+            input_dim=self.input_dim, hidden_dim=self.input_dim)
         # encode position features along each temporal walk
-        self.position_encoder = BiLSTMEncoder(input_dim=self.position_feat_dim, hidden_dim=self.position_feat_dim)
+        self.position_encoder = BiLSTMEncoder(
+            input_dim=self.position_feat_dim, hidden_dim=self.position_feat_dim)
 
-        self.transformer_encoder = TransformerEncoder(attention_dim=self.attention_dim, num_heads=self.num_walk_heads, dropout=self.dropout)
+        self.transformer_encoder = TransformerEncoder(
+            attention_dim=self.attention_dim, num_heads=self.num_walk_heads, dropout=self.dropout)
 
         # due to the usage of BiLSTM, self.feature_encoder.model_dim may not be equal to self.input_dim, since self.input_dim may not be an even number
         # also, self.position_encoder.model_dim may not be equal to self.input_dim, since self.input_dim may not be an even number
         # projection layers for 1) combination of outputs from self.feature_encoder and self.position_encoder; and 2) final output
         self.projection_layers = nn.ModuleList([
-            nn.Linear(in_features=self.feature_encoder.model_dim + self.position_encoder.model_dim, out_features=self.attention_dim),
-            nn.Linear(in_features=self.attention_dim, out_features=self.output_dim)
+            nn.Linear(in_features=self.feature_encoder.model_dim +
+                      self.position_encoder.model_dim, out_features=self.attention_dim),
+            nn.Linear(in_features=self.attention_dim,
+                      out_features=self.output_dim)
         ])
 
     def forward(self, neighbor_raw_features: torch.Tensor, neighbor_time_features: torch.Tensor, edge_features: torch.Tensor,
@@ -339,17 +376,22 @@ class WalkEncoder(nn.Module):
         :return:
         """
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.walk_length + 1, node_feat_dim + time_feat_dim + edge_feat_dim + position_feat_dim)
-        combined_features = torch.cat([neighbor_raw_features, neighbor_time_features, edge_features, neighbor_position_features], dim=-1)
+        combined_features = torch.cat(
+            [neighbor_raw_features, neighbor_time_features, edge_features, neighbor_position_features], dim=-1)
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.feature_encoder.model_dim), feed the combined features to BiLSTM
-        combined_features = self.feature_encoder(inputs=combined_features, lengths=walks_valid_lengths)
+        combined_features = self.feature_encoder(
+            inputs=combined_features, lengths=walks_valid_lengths)
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.position_encoder.model_dim), feed the position features to BiLSTM
-        neighbor_position_features = self.position_encoder(inputs=neighbor_position_features, lengths=walks_valid_lengths)
+        neighbor_position_features = self.position_encoder(
+            inputs=neighbor_position_features, lengths=walks_valid_lengths)
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.feature_encoder.model_dim + self.position_encoder.model_dim)
-        combined_features = torch.cat([combined_features, neighbor_position_features], dim=-1)
+        combined_features = torch.cat(
+            [combined_features, neighbor_position_features], dim=-1)
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.attention_dim)
         combined_features = self.projection_layers[0](combined_features)
         # Tensor, shape (batch_size, self.attention_dim), feed into Transformer and then perform mean pooling over multiple random walks
-        combined_features = self.transformer_encoder(inputs_query=combined_features).mean(dim=-2)
+        combined_features = self.transformer_encoder(
+            inputs_query=combined_features).mean(dim=-2)
         # Tensor, shape (batch_size, self.output_dim)
         outputs = self.projection_layers[1](combined_features)
         return outputs
@@ -366,7 +408,8 @@ class BiLSTMEncoder(nn.Module):
         super(BiLSTMEncoder, self).__init__()
         self.hidden_dim_one_direction = hidden_dim // 2
         self.model_dim = self.hidden_dim_one_direction * 2
-        self.bilstm_encoder = nn.LSTM(input_size=input_dim, hidden_size=self.hidden_dim_one_direction, batch_first=True, bidirectional=True)
+        self.bilstm_encoder = nn.LSTM(
+            input_size=input_dim, hidden_size=self.hidden_dim_one_direction, batch_first=True, bidirectional=True)
 
     def forward(self, inputs: torch.Tensor, lengths: np.ndarray):
         """
@@ -376,21 +419,28 @@ class BiLSTMEncoder(nn.Module):
         :return:
         """
         # Tensor, shape (batch_size * (num_neighbors ** self.walk_length), self.walk_length + 1, input_dim), which corresponds to the LSTM input (batch_size, seq_len, input_dim)
-        inputs = inputs.reshape(inputs.shape[0] * inputs.shape[1], inputs.shape[2], inputs.shape[3])
+        inputs = inputs.reshape(
+            inputs.shape[0] * inputs.shape[1], inputs.shape[2], inputs.shape[3])
         # a PackedSequence object, pack the padded sequence for efficient computation and avoid the errors of computing padded value, set enforce_sorted to False
-        inputs = pack_padded_sequence(inputs, lengths.flatten(), batch_first=True, enforce_sorted=False)
+        inputs = pack_padded_sequence(
+            inputs, lengths.flatten(), batch_first=True, enforce_sorted=False)
         # the outputs of LSTM are output, (h_n, c_n), and we only use the output and do not use hidden states
         encoded_features, _ = self.bilstm_encoder(inputs)
         # encoded_features, Tensor, shape (batch_size * (num_neighbors ** self.walk_length), self.walk_length + 1, self.model_dim), pad the packed sequence
         # seq_lengths, Tensor, shape (batch_size * (num_neighbors ** self.walk_length), )
-        encoded_features, seq_lengths = pad_packed_sequence(encoded_features, batch_first=True)
+        encoded_features, seq_lengths = pad_packed_sequence(
+            encoded_features, batch_first=True)
         assert (seq_lengths.numpy() == lengths.flatten()).all()
         # Tensor, shape (batch_size * (num_neighbors ** self.walk_length), ), the shifted sequence lengths
-        shifted_seq_lengths = seq_lengths + torch.tensor([i * encoded_features.shape[1] for i in range(encoded_features.shape[0])])
+        shifted_seq_lengths = seq_lengths + \
+            torch.tensor([i * encoded_features.shape[1]
+                         for i in range(encoded_features.shape[0])])
         # Tensor, shape (batch_size * (num_neighbors ** self.walk_length) * (self.walk_length + 1), self.model_dim)
-        encoded_features = encoded_features.reshape(encoded_features.shape[0] * encoded_features.shape[1], encoded_features.shape[2])
+        encoded_features = encoded_features.reshape(
+            encoded_features.shape[0] * encoded_features.shape[1], encoded_features.shape[2])
         # Tensor, shape (batch_size, num_neighbors ** self.walk_length, self.model_dim), get the encodings of each walk at the last position
         # note that we need to use shifted_seq_lengths - 1 to get the shifted indices
-        encoded_features = encoded_features[shifted_seq_lengths - 1].reshape(lengths.shape[0], lengths.shape[1], self.model_dim)
+        encoded_features = encoded_features[shifted_seq_lengths - 1].reshape(
+            lengths.shape[0], lengths.shape[1], self.model_dim)
 
         return encoded_features

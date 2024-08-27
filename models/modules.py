@@ -17,7 +17,8 @@ class TimeEncoder(nn.Module):
         self.time_dim = time_dim
         # trainable parameters for time encoding
         self.w = nn.Linear(1, time_dim)
-        self.w.weight = nn.Parameter((torch.from_numpy(1 / 10 ** np.linspace(0, 9, time_dim, dtype=np.float32))).reshape(time_dim, -1))
+        self.w.weight = nn.Parameter((torch.from_numpy(
+            1 / 10 ** np.linspace(0, 9, time_dim, dtype=np.float32))).reshape(time_dim, -1))
         self.w.bias = nn.Parameter(torch.zeros(time_dim))
 
         if not parameter_requires_grad:
@@ -122,9 +123,12 @@ class MultiHeadAttention(nn.Module):
 
         self.head_dim = self.query_dim // num_heads
 
-        self.query_projection = nn.Linear(self.query_dim, num_heads * self.head_dim, bias=False)
-        self.key_projection = nn.Linear(self.key_dim, num_heads * self.head_dim, bias=False)
-        self.value_projection = nn.Linear(self.key_dim, num_heads * self.head_dim, bias=False)
+        self.query_projection = nn.Linear(
+            self.query_dim, num_heads * self.head_dim, bias=False)
+        self.key_projection = nn.Linear(
+            self.key_dim, num_heads * self.head_dim, bias=False)
+        self.value_projection = nn.Linear(
+            self.key_dim, num_heads * self.head_dim, bias=False)
 
         self.scaling_factor = self.head_dim ** -0.5
 
@@ -150,16 +154,21 @@ class MultiHeadAttention(nn.Module):
         node_features = torch.unsqueeze(node_features, dim=1)
 
         # Tensor, shape (batch_size, 1, node_feat_dim + time_feat_dim)
-        query = residual = torch.cat([node_features, node_time_features], dim=2)
+        query = residual = torch.cat(
+            [node_features, node_time_features], dim=2)
         # shape (batch_size, 1, num_heads, self.head_dim)
-        query = self.query_projection(query).reshape(query.shape[0], query.shape[1], self.num_heads, self.head_dim)
+        query = self.query_projection(query).reshape(
+            query.shape[0], query.shape[1], self.num_heads, self.head_dim)
 
         # Tensor, shape (batch_size, num_neighbors, node_feat_dim + edge_feat_dim + time_feat_dim)
-        key = value = torch.cat([neighbor_node_features, neighbor_node_edge_features, neighbor_node_time_features], dim=2)
+        key = value = torch.cat(
+            [neighbor_node_features, neighbor_node_edge_features, neighbor_node_time_features], dim=2)
         # Tensor, shape (batch_size, num_neighbors, num_heads, self.head_dim)
-        key = self.key_projection(key).reshape(key.shape[0], key.shape[1], self.num_heads, self.head_dim)
+        key = self.key_projection(key).reshape(
+            key.shape[0], key.shape[1], self.num_heads, self.head_dim)
         # Tensor, shape (batch_size, num_neighbors, num_heads, self.head_dim)
-        value = self.value_projection(value).reshape(value.shape[0], value.shape[1], self.num_heads, self.head_dim)
+        value = self.value_projection(value).reshape(
+            value.shape[0], value.shape[1], self.num_heads, self.head_dim)
 
         # Tensor, shape (batch_size, num_heads, 1, self.head_dim)
         query = query.permute(0, 2, 1, 3)
@@ -173,10 +182,12 @@ class MultiHeadAttention(nn.Module):
         attention = attention * self.scaling_factor
 
         # Tensor, shape (batch_size, 1, num_neighbors)
-        attention_mask = torch.from_numpy(neighbor_masks).to(node_features.device).unsqueeze(dim=1)
+        attention_mask = torch.from_numpy(neighbor_masks).to(
+            node_features.device).unsqueeze(dim=1)
         attention_mask = attention_mask == 0
         # Tensor, shape (batch_size, self.num_heads, 1, num_neighbors)
-        attention_mask = torch.stack([attention_mask for _ in range(self.num_heads)], dim=1)
+        attention_mask = torch.stack(
+            [attention_mask for _ in range(self.num_heads)], dim=1)
 
         # Tensor, shape (batch_size, self.num_heads, 1, num_neighbors)
         # note that if a node has no valid neighbor (whose neighbor_masks are all zero), directly set the masks to -np.inf will make the
@@ -187,10 +198,12 @@ class MultiHeadAttention(nn.Module):
         attention_scores = self.dropout(torch.softmax(attention, dim=-1))
 
         # Tensor, shape (batch_size, num_heads, 1, self.head_dim)
-        attention_output = torch.einsum('bhln,bhnd->bhld', attention_scores, value)
+        attention_output = torch.einsum(
+            'bhln,bhnd->bhld', attention_scores, value)
 
         # Tensor, shape (batch_size, 1, num_heads * self.head_dim), where num_heads * self.head_dim is equal to node_feat_dim + time_feat_dim
-        attention_output = attention_output.permute(0, 2, 1, 3).flatten(start_dim=2)
+        attention_output = attention_output.permute(
+            0, 2, 1, 3).flatten(start_dim=2)
 
         # Tensor, shape (batch_size, 1, node_feat_dim + time_feat_dim)
         output = self.dropout(self.residual_fc(attention_output))
@@ -217,13 +230,16 @@ class TransformerEncoder(nn.Module):
         """
         super(TransformerEncoder, self).__init__()
         # use the MultiheadAttention implemented by PyTorch
-        self.multi_head_attention = nn.MultiheadAttention(embed_dim=attention_dim, num_heads=num_heads, dropout=dropout)
+        self.multi_head_attention = nn.MultiheadAttention(
+            embed_dim=attention_dim, num_heads=num_heads, dropout=dropout)
 
         self.dropout = nn.Dropout(dropout)
 
         self.linear_layers = nn.ModuleList([
-            nn.Linear(in_features=attention_dim, out_features=4 * attention_dim),
-            nn.Linear(in_features=4 * attention_dim, out_features=attention_dim)
+            nn.Linear(in_features=attention_dim,
+                      out_features=4 * attention_dim),
+            nn.Linear(in_features=4 * attention_dim,
+                      out_features=attention_dim)
         ])
         self.norm_layers = nn.ModuleList([
             nn.LayerNorm(attention_dim),
@@ -247,19 +263,23 @@ class TransformerEncoder(nn.Module):
         # transposed_inputs_query, Tensor, shape (target_seq_length, batch_size, self.attention_dim)
         # transposed_inputs_key, Tensor, shape (source_seq_length, batch_size, self.attention_dim)
         # transposed_inputs_value, Tensor, shape (source_seq_length, batch_size, self.attention_dim)
-        transposed_inputs_query, transposed_inputs_key, transposed_inputs_value = inputs_query.transpose(0, 1), inputs_key.transpose(0, 1), inputs_value.transpose(0, 1)
+        transposed_inputs_query, transposed_inputs_key, transposed_inputs_value = inputs_query.transpose(
+            0, 1), inputs_key.transpose(0, 1), inputs_value.transpose(0, 1)
 
         if neighbor_masks is not None:
             # Tensor, shape (batch_size, source_seq_length)
-            neighbor_masks = torch.from_numpy(neighbor_masks).to(inputs_query.device) == 0
+            neighbor_masks = torch.from_numpy(
+                neighbor_masks).to(inputs_query.device) == 0
 
         # Tensor, shape (batch_size, target_seq_length, self.attention_dim)
         hidden_states = self.multi_head_attention(query=transposed_inputs_query, key=transposed_inputs_key,
                                                   value=transposed_inputs_value, key_padding_mask=neighbor_masks)[0].transpose(0, 1)
         # Tensor, shape (batch_size, target_seq_length, self.attention_dim)
-        outputs = self.norm_layers[0](inputs_query + self.dropout(hidden_states))
+        outputs = self.norm_layers[0](
+            inputs_query + self.dropout(hidden_states))
         # Tensor, shape (batch_size, target_seq_length, self.attention_dim)
-        hidden_states = self.linear_layers[1](self.dropout(F.relu(self.linear_layers[0](outputs))))
+        hidden_states = self.linear_layers[1](
+            self.dropout(F.relu(self.linear_layers[0](outputs))))
         # Tensor, shape (batch_size, target_seq_length, self.attention_dim)
         outputs = self.norm_layers[1](outputs + self.dropout(hidden_states))
 
