@@ -6,6 +6,8 @@ saved_results/
 nohup.md
 nohup.out
 __pycache__
-*.ipynb
-*.sh
-env/
+env/env208
+env/env209
+run_baseline.sh
+run_em.sh
+run_unified.sh
