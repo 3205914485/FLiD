@@ -25,6 +25,11 @@ from utils.DataLoader import get_idx_data_loader, get_node_classification_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_args
 
+cpu_num = 2
+os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
+os.environ["MKL_NUM_THREADS"] = str(cpu_num)  # noqa
+torch.set_num_threads(cpu_num)
+
 if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
