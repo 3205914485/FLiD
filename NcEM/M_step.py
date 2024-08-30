@@ -325,7 +325,7 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
     new_labels = torch.cat(
         pseudo_labels_list, dim=0).detach().unsqueeze(dim=-1)
     pseudo_labels.copy_(new_labels)
-    pseudo_entropy.extend(pseudo_entropy_list[min(0, best_epoch-args.pseudo_entropy_ws): best_epoch+1])
+    pseudo_entropy.extend(pseudo_entropy_list[max(0, best_epoch-args.pseudo_entropy_ws): best_epoch+1])
     return val_total_loss, val_metrics, test_total_loss, test_metrics
 
 

@@ -185,7 +185,8 @@ if __name__ == "__main__":
             
             pseudo_labels, num_targets = update_pseudo_labels(
                 data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th)
-            logger.info(f"Iter: {k}, The sliding windows has {num_targets} sets entropy")
+            logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
+            
             if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
                 log_and_save_metrics(
                     logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')
