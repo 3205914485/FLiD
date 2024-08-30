@@ -1,26 +1,19 @@
-import copy
-from datetime import datetime
-from shutil import copyfile
+from collections import deque
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 import logging
 import time
 import sys
 import os
-from tqdm import tqdm
 import numpy as np
 import warnings
 import shutil
 import torch
 import torch.nn as nn
-import json
 
-from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes, create_optimizer
+from utils.utils import set_random_seed
 from utils.utils import get_neighbor_sampler
-from evaluate_models_utils import evaluate_model_node_classification
-from utils.DataLoader import get_idx_data_loader, get_node_classification_data, get_link_prediction_data, get_NcEM_data
+from utils.DataLoader import get_idx_data_loader, get_NcEM_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_em_args
 
@@ -43,7 +36,7 @@ if __name__ == "__main__":
     # get arguments
     args = get_node_classification_em_args()
     # get data for training, validation and testing
-    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, num_node_features = \
+    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, num_node_features, val_offest, test_offest = \
         get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt)
 
@@ -67,7 +60,9 @@ if __name__ == "__main__":
         "full_data": full_data,
         "train_data": train_data,
         "val_data": val_data,
+        "val_offest": val_offest,
         "test_data": test_data,
+        "test_offest": test_offest,
         "full_neighbor_sampler": full_neighbor_sampler,
         "full_idx_data_loader": full_idx_data_loader,
         "train_idx_data_loader": train_idx_data_loader,
@@ -117,17 +112,18 @@ if __name__ == "__main__":
             num_interactions, num_node_features, device=args.device)
         dst_node_embeddings = torch.zeros(
             num_interactions, num_node_features, device=args.device)
+        pseudo_entropy = deque(maxlen=args.pseudo_entropy_ws)
+
         if args.dataset_name in double_way_datasets:
             pseudo_labels = torch.zeros(
                 num_interactions, 2, device=args.device)
-            pseudo_labels_confidence = []
         else:
             pseudo_labels = torch.zeros(
                 num_interactions, 1, device=args.device)
-            pseudo_labels_confidence = []
 
         base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict = {}, {}, {}, {}, {}, {}
-        # EM training
+       
+        # EM Warmup
         Etrainer, Mtrainer = em_init(args=args,
                                      logger=logger,
                                      train_data=train_data,
@@ -136,17 +132,19 @@ if __name__ == "__main__":
                                      full_neighbor_sampler=full_neighbor_sampler
                                      )
 
-        base_val_total_loss, base_val_metrics, base_test_total_loss, base_test_metrics, pseudo_labels_confidence = \
+        base_val_total_loss, base_val_metrics, base_test_total_loss, base_test_metrics = \
             em_warmup(args=args,
                       data=data,
                       logger=logger,
                       Etrainer=Etrainer,
                       Mtrainer=Mtrainer,
                       pseudo_labels=pseudo_labels,
+                      pseudo_entropy=pseudo_entropy,
                       src_node_embeddings=src_node_embeddings,
                       dst_node_embeddings=dst_node_embeddings)
-        pseudo_labels = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels)
+        
+        pseudo_labels, num_targets = update_pseudo_labels(
+            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th)
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
@@ -160,6 +158,7 @@ if __name__ == "__main__":
                 logger.removeHandler(ch)
             continue
 
+        # EM training
         model_name = Etrainer.model_name
         save_model_name = f'ncem_{model_name}'
         save_model_folder = f"./saved_models/ncem/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
@@ -178,14 +177,15 @@ if __name__ == "__main__":
                 gt_weight = 1.0
             Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
                 e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                       src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_labels_confidence=pseudo_labels_confidence)
-
-            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics, pseudo_labels_confidence = \
-                m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
-            pseudo_labels = update_pseudo_labels(
-                data=data, pseudo_labels=pseudo_labels)
 
+            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
+                m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+                       src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_entropy=pseudo_entropy)
+            
+            pseudo_labels, num_targets = update_pseudo_labels(
+                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th)
+            logger.info(f"Iter: {k}, The sliding windows has {num_targets} sets entropy")
             if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
                 log_and_save_metrics(
                     logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')

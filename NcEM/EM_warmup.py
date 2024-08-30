@@ -35,7 +35,7 @@ from NcEM.trainer import Trainer
 from NcEM.M_step import train_model_node_classification_withembeddings
 
 
-def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node_embeddings, dst_node_embeddings, pseudo_labels):
+def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node_embeddings, dst_node_embeddings, pseudo_labels, pseudo_entropy):
 
     logger.info("\nStart Warming up\n")
     logger.info("Warm-up-1 : Start training link prediction for backbone\n")
@@ -46,7 +46,7 @@ def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node
     logger.info("Warm-up-2 : Start training node classification for decoder\n")
     save_model_name = f'ncem_{Etrainer.model_name}'
     save_model_folder = f"./saved_models/ncem/M/warmup/{args.dataset_name}/{args.seed}/{save_model_name}/"
-    val_total_loss, val_metrics, test_total_loss, test_metrics, pseudo_labels_confidence =\
+    val_total_loss, val_metrics, test_total_loss, test_metrics =\
         train_model_node_classification_withembeddings(
             args=args,
             data=data,
@@ -56,12 +56,13 @@ def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node
             train=args.warmup_m_train,
             patience=args.mw_patience,
             pseudo_labels=pseudo_labels,
+            pseudo_entropy=pseudo_entropy,
             save_model_folder=save_model_folder,
             num_epochs=args.num_epochs_m_warmup,
             src_node_embeddings=src_node_embeddings,
             dst_node_embeddings=dst_node_embeddings)
 
-    return val_total_loss, val_metrics, test_total_loss, test_metrics, pseudo_labels_confidence
+    return val_total_loss, val_metrics, test_total_loss, test_metrics
 
 
 def link_prediction(args, Etrainer, data, logger):

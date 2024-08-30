@@ -45,15 +45,22 @@ def log_average_metrics(logger, metric_all_runs, prefix):
                     f'± {np.std(metric_values, ddof=1):.4f}')
 
 
-def update_pseudo_labels(data, pseudo_labels):
+def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold):
 
+
+    pseudo_entropy_list = list(pseudo_entropy)
+    num_targets = len(pseudo_entropy_list)
+    pseudo_entropy_list = [torch.squeeze(pseudo_confidence[:,0] - pseudo_confidence[:,1]) for pseudo_confidence in pseudo_entropy_list]
+    pseudo_entropy_score = torch.abs(torch.sum(torch.stack(pseudo_entropy_list),dim=0))
+    mask_entropy = pseudo_entropy_score > threshold * num_targets
+    pseudo_labels[~mask_entropy] = -1
     true_labels = data['full_data'].labels.astype('float32')
     labels_times = data['full_data'].labels_time
     interact_times = data['full_data'].node_interact_times
 
-    mask = torch.from_numpy(interact_times == labels_times).to(torch.bool)
+    mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
 
-    pseudo_labels[mask] = torch.from_numpy(
-        true_labels[mask]).unsqueeze(1).to(pseudo_labels.device)
+    pseudo_labels[mask_gt] = torch.from_numpy(
+        true_labels[mask_gt]).unsqueeze(1).to(pseudo_labels.device)
 
-    return pseudo_labels
+    return pseudo_labels, num_targets

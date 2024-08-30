@@ -425,16 +425,17 @@ def get_node_classification_em_args():
     parser.add_argument('--mw_patience', type=int, default=50, help='patience specific for m_warmup')   
 
     # EM-Iter settings:
-    parser.add_argument('--use_unified', type=int, default=0, help='Whether use the unifed EM train')    
-    parser.add_argument('--use_confidence', type=int, default=1, help='Whether use the confidence threshold for pseudo lables')
-    parser.add_argument('--confidence_threshold', type=float, default=0.7, help='Threshold for pseudo labels confidence')
+    parser.add_argument('--use_entropy', type=int, default=1, help='Whether use the pseudo labels entropy')
+    parser.add_argument('--pseudo_entropy_ws', type=int, default=25, help='Pseudo_entropy window size')    
+    parser.add_argument('--pseudo_entropy_th', type=float, default=0.7, help='Pseudo_entropy window size')
+    parser.add_argument('--use_unified', type=int, default=0, help='Whether use the unifed EM train')
     parser.add_argument('--decoder', type=int, default=1, help='num_decoders for training')
     parser.add_argument('--gt_weight', type=float, default=0.9, help='gt_weight to make the gt consider better')
-    parser.add_argument('--em_patience', type=int, default=10, help='patience specific for EM iters loop')    
-    parser.add_argument('--patience', type=int, default=20, help='patience for early stopping')
+    parser.add_argument('--em_patience', type=int, default=5, help='patience specific for EM iters loop')    
+    parser.add_argument('--patience', type=int, default=10, help='patience for early stopping')
     parser.add_argument('--num_em_iters', type=int, default=30, help='number of EM iters')
-    parser.add_argument('--num_epochs_e_step', type=int, default=50, help='number of epochs of E step')
-    parser.add_argument('--num_epochs_m_step', type=int, default=200, help='number of epochs of M step')
+    parser.add_argument('--num_epochs_e_step', type=int, default=3, help='number of epochs of E step')
+    parser.add_argument('--num_epochs_m_step', type=int, default=3, help='number of epochs of M step')
 
 
     # Model specific settings:

@@ -32,8 +32,8 @@ from NcEM.trainer import Trainer
 double_way_dataset = ['bot', 'bot22', 'taobao', 'yelp']
 
 
-def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader,
-                                              evaluate_data: Data, loss_func: nn.Module, num_neighbors: int = 20, time_gap: int = 2000):
+def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
+                                              evaluate_data: Data, loss_func: nn.Module, pseudo_labels: torch.tensor, num_neighbors: int = 20, time_gap: int = 2000, use_entropy: bool = True):
     r"""
     evaluate models on the node classification task with E step
     :param model_name: str, name of the model
@@ -54,7 +54,7 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
 
     with torch.no_grad():
         # store evaluate losses, trues and predicts
-        evaluate_total_loss, evaluate_y_trues, evaluate_y_predicts, evaluate_y_trues_gt, evaluate_y_predicts_gt = 0.0, [], [], [], []
+        evaluate_total_loss, evaluate_y_trues, evaluate_y_predicts, evaluate_y_trues_gt, evaluate_y_predicts_gt, entropy_through = 0.0, [], [], [], [], 0
         evaluate_idx_data_loader_tqdm = tqdm(
             evaluate_idx_data_loader, ncols=120)
         for batch_idx, evaluate_data_indices in enumerate(evaluate_idx_data_loader_tqdm):
@@ -63,11 +63,11 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
                 batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels = \
                     evaluate_data.src_node_ids[evaluate_data_indices],  evaluate_data.dst_node_ids[evaluate_data_indices], \
                     evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], [
-                        evaluate_data.labels[0][evaluate_data_indices], evaluate_data.labels[1][evaluate_data_indices]]
+                        pseudo_labels[0][evaluate_data_indices+offest], pseudo_labels[1][evaluate_data_indices+offest]]
             else:
                 batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
                     evaluate_data.src_node_ids[evaluate_data_indices],  evaluate_data.dst_node_ids[evaluate_data_indices], \
-                    evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], evaluate_data.labels[evaluate_data_indices], \
+                    evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], pseudo_labels[evaluate_data_indices+offest], \
                     evaluate_data.labels_time[evaluate_data_indices]
 
             if model_name in ['TGAT', 'CAWN', 'TCL']:
@@ -120,8 +120,8 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
             if dataset in double_way_dataset:
                 predicts = model[1](x=torch.cat(
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0)).squeeze(dim=-1).sigmoid()
-                labels = torch.from_numpy(np.concatenate(
-                    [batch_labels[0], batch_labels[1]], axis=0)).long().to(predicts.device)
+                labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
+                    torch.long).to(predicts.device).squeeze(dim=-1)
                 mask_gt_src = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times[0]).to(torch.bool)
                 mask_gt_dst = torch.from_numpy(
@@ -131,26 +131,29 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
             else:
                 predicts = model[1](x=batch_src_node_embeddings).squeeze(
                     dim=-1).sigmoid()
-                labels = torch.from_numpy(
-                    batch_labels).long().to(predicts.device)
+                labels = batch_labels.to(torch.long).to(
+                    predicts.device).squeeze(dim=-1)
                 mask_gt = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
+                
+            if use_entropy:
+                mask_all = (labels != -1).to('cpu')
+                entropy_through += sum(mask_all)
+            else:
+                mask_all = (labels == labels).to('cpu')
 
-            loss = loss_func(input=predicts, target=labels)
+            loss = loss_func(input=predicts[mask_all], target=labels[mask_all])
 
             evaluate_total_loss += loss.item()
 
-            predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
+            evaluate_y_trues.append(labels[mask_all])
+            evaluate_y_predicts.append(predicts[mask_all])
 
-            evaluate_y_trues.append(labels)
-            evaluate_y_predicts.append(predicts)
-
-            evaluate_y_trues_gt.append(labels_gt)
-            evaluate_y_predicts_gt.append(predicts_gt)
+            evaluate_y_trues_gt.append(labels[mask_gt])
+            evaluate_y_predicts_gt.append(predicts[mask_gt])
 
             evaluate_idx_data_loader_tqdm.set_description(
                 f'evaluate for the {batch_idx + 1}-th batch, evaluate loss: {loss.item()}')
-
         evaluate_total_loss /= (batch_idx + 1)
         evaluate_y_trues = torch.cat(evaluate_y_trues, dim=0)
         evaluate_y_predicts = torch.cat(evaluate_y_predicts, dim=0)
@@ -161,16 +164,18 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
         evaluate_metrics_gt = get_node_classification_metrics_em(
             predicts=evaluate_y_predicts_gt, labels=evaluate_y_trues_gt)
 
-    return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt
+    return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt, entropy_through
 
 
-def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings, pseudo_labels_confidence):
+def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings):
 
     logger.info(f"Starting E-step\n")
     full_data = data['full_data']
     train_data = data["train_data"]
     val_data = data["val_data"]
+    val_offest = data['val_offest']
     test_data = data["test_data"]
+    test_offest = data['test_offest']
     full_neighbor_sampler = data["full_neighbor_sampler"]
     full_idx_data_loader = data["full_idx_data_loader"]
     train_idx_data_loader = data["train_idx_data_loader"]
@@ -178,8 +183,6 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
     test_idx_data_loader = data["test_idx_data_loader"]
 
     dynamic_backbone = Etrainer.model
-    # node_classifier = Mtrainer.model
-    # node_classifier = MLPClassifier(input_dim=172, dropout=args.dropout).to(args.device)
     if args.decoder == 1:
         node_classifier = Mtrainer.model[1]
         model = nn.Sequential(dynamic_backbone, node_classifier)
@@ -221,20 +224,19 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
         # store train losses, trues and predicts
         train_total_loss, train_y_trues, train_y_predicts = 0.0, [], []
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
+        train_entropy_through = 0
         for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
             train_data_indices = train_data_indices.numpy()
 
             if args.dataset_name in double_way_dataset:
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times, batch_ps_confidence = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
                     train_data.edge_ids[train_data_indices], [pseudo_labels[0][train_data_indices], pseudo_labels[1][train_data_indices]], \
-                    [train_data.labels_time[0][train_data_indices], train_data.labels_time[1]
-                        [train_data_indices]], pseudo_labels_confidence[train_data_indices]
+                    [train_data.labels_time[0][train_data_indices], train_data.labels_time[1][train_data_indices]]
             else:
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times, batch_ps_confidence = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
-                    train_data.edge_ids[train_data_indices], pseudo_labels[train_data_indices], train_data.labels_time[
-                        train_data_indices], pseudo_labels_confidence[train_data_indices]
+                    train_data.edge_ids[train_data_indices], pseudo_labels[train_data_indices], train_data.labels_time[train_data_indices]
 
             if model_name in ['TGAT', 'CAWN', 'TCL']:
                 # get temporal embedding of source and destination nodes
@@ -300,20 +302,22 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                     predicts.device).squeeze(dim=-1)
                 mask_gt = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
-            if args.use_confidence:
-                mask_ps = (batch_ps_confidence > args.confidence_threshold).to(
-                    torch.bool).squeeze(dim=-1)
+            if args.use_entropy:
+                mask_ps = (labels != -1).to('cpu')
+                train_entropy_through += sum(mask_ps)
                 mask_ps &= ~mask_gt
             else:
                 mask_ps = ~mask_gt
             predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
             predicts_ps, labels_ps = predicts[mask_ps], labels[mask_ps]
             loss_gt = loss_func(input=predicts_gt, target=labels_gt)
+            loss_gt = torch.tensor(0.0) if torch.isnan(loss_gt) else loss_gt
             loss_ps = loss_func(input=predicts_ps, target=labels_ps)
+            loss_ps = torch.tensor(0.0) if torch.isnan(loss_ps) else loss_ps
             loss = gt_weight*loss_gt + (1-gt_weight)*loss_ps
             train_total_loss += loss.item()
-            train_y_trues.append(labels)
-            train_y_predicts.append(predicts)
+            train_y_trues.append(labels[mask_ps | mask_gt])
+            train_y_predicts.append(predicts[mask_ps | mask_gt])
 
             optimizer.zero_grad()
             loss.backward()
@@ -326,29 +330,35 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
             if model_name in ['JODIE', 'DyRep', 'TGN']:
                 # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
                 model[0].memory_bank.detach_memory_bank()
-
+        if train_entropy_through != 0 and epoch == 0 :
+            logger.info(f'Train Entropy through: {train_entropy_through/len(train_data.src_node_ids):.4f}')
         train_total_loss /= (batch_idx + 1)
         train_y_trues = torch.cat(train_y_trues, dim=0)
         train_y_predicts = torch.cat(train_y_predicts, dim=0)
 
         train_metrics = get_node_classification_metrics_em(
             predicts=train_y_predicts, labels=train_y_trues)
-
-        val_total_loss, val_metrics, val_metrics_gt = evaluate_model_node_classification_E_step(model_name=model_name,
-                                                                                                model=model,
-                                                                                                dataset=args.dataset_name,
-                                                                                                neighbor_sampler=full_neighbor_sampler,
-                                                                                                evaluate_idx_data_loader=val_idx_data_loader,
-                                                                                                evaluate_data=val_data,
-                                                                                                loss_func=loss_func,
-                                                                                                num_neighbors=args.num_neighbors,
-                                                                                                time_gap=args.time_gap)
-
         logger.info(
             f'Epoch: {epoch + 1}, learning rate: {optimizer.param_groups[0]["lr"]}, train loss: {train_total_loss:.4f}')
         for metric_name in train_metrics.keys():
             logger.info(
                 f'train {metric_name}, {train_metrics[metric_name]:.4f}')
+            
+        val_total_loss, val_metrics, val_metrics_gt, val_entropy_through = evaluate_model_node_classification_E_step(model_name=model_name,
+                                                                                                model=model,
+                                                                                                dataset=args.dataset_name,
+                                                                                                neighbor_sampler=full_neighbor_sampler,
+                                                                                                evaluate_idx_data_loader=val_idx_data_loader,
+                                                                                                evaluate_data=val_data,
+                                                                                                pseudo_labels=pseudo_labels,
+                                                                                                offest=val_offest,
+                                                                                                use_entropy=args.use_entropy,
+                                                                                                loss_func=loss_func,
+                                                                                                num_neighbors=args.num_neighbors,
+                                                                                                time_gap=args.time_gap)
+
+        if val_entropy_through != 0 and epoch == 0 :
+            logger.info(f'Valid Entropy through: {val_entropy_through/len(val_data.src_node_ids):.4f}')    
         logger.info(f'validate loss: {val_total_loss:.4f}')
         for metric_name in val_metrics.keys():
             logger.info(
@@ -363,12 +373,15 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                 val_backup_memory_bank = model[0].memory_bank.backup_memory_bank(
                 )
 
-            test_total_loss, test_metrics, test_metrics_gt = evaluate_model_node_classification_E_step(model_name=model_name,
+            test_total_loss, test_metrics, test_metrics_gt, test_entropy_through = evaluate_model_node_classification_E_step(model_name=model_name,
                                                                                                        model=model,
                                                                                                        dataset=args.dataset_name,
                                                                                                        neighbor_sampler=full_neighbor_sampler,
                                                                                                        evaluate_idx_data_loader=test_idx_data_loader,
                                                                                                        evaluate_data=test_data,
+                                                                                                       offest=test_offest,
+                                                                                                       use_entropy=args.use_entropy,
+                                                                                                       pseudo_labels=pseudo_labels,
                                                                                                        loss_func=loss_func,
                                                                                                        num_neighbors=args.num_neighbors,
                                                                                                        time_gap=args.time_gap)
@@ -377,7 +390,8 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                 # reload validation memory bank for saving models
                 # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
                 model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
-
+            if test_entropy_through != 0 and epoch == 0 :
+                logger.info(f'Test Entropy through: {test_entropy_through/len(test_data.src_node_ids):.4f}')    
             logger.info(f'test loss: {test_total_loss:.4f}')
             for metric_name in test_metrics.keys():
                 logger.info(
@@ -409,22 +423,28 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
 
     # the saved best model of memory-based models cannot perform validation since the stored memory has been updated by validation data
     if model_name not in ['JODIE', 'DyRep', 'TGN']:
-        val_total_loss, val_metric, val_metrics_gt = evaluate_model_node_classification_E_step(model_name=model_name,
+        val_total_loss, val_metric, val_metrics_gt, val_entropy_through = evaluate_model_node_classification_E_step(model_name=model_name,
                                                                                                model=model,
                                                                                                dataset=args.dataset_name,
                                                                                                neighbor_sampler=full_neighbor_sampler,
                                                                                                evaluate_idx_data_loader=val_idx_data_loader,
                                                                                                evaluate_data=val_data,
+                                                                                               offest=val_offest,
+                                                                                               use_entropy=args.use_entropy,
+                                                                                               pseudo_labels=pseudo_labels,
                                                                                                loss_func=loss_func,
                                                                                                num_neighbors=args.num_neighbors,
                                                                                                time_gap=args.time_gap)
 
-    test_total_loss, test_metrics, test_metrics_gt = evaluate_model_node_classification_E_step(model_name=model_name,
+    test_total_loss, test_metrics, test_metrics_gt, test_entropy_through = evaluate_model_node_classification_E_step(model_name=model_name,
                                                                                                model=model,
                                                                                                dataset=args.dataset_name,
                                                                                                neighbor_sampler=full_neighbor_sampler,
                                                                                                evaluate_idx_data_loader=test_idx_data_loader,
                                                                                                evaluate_data=test_data,
+                                                                                               offest=test_offest,
+                                                                                               use_entropy=args.use_entropy,
+                                                                                               pseudo_labels=pseudo_labels,
                                                                                                loss_func=loss_func,
                                                                                                num_neighbors=args.num_neighbors,
                                                                                                time_gap=args.time_gap)
