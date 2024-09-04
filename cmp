@@ -181,75 +181,53 @@ if __name__ == "__main__":
             train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
             for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
                 train_data_indices = train_data_indices.numpy()
-                if args.dataset_name == 'bot' or args.dataset_name == 'bot22':
-                    batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels = \
-                        train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
-                        train_data.edge_ids[train_data_indices], [
-                            train_data.labels[0][train_data_indices], train_data.labels[1][train_data_indices]]
-                else:
-                    batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
-                        train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
-                        train_data.edge_ids[train_data_indices], train_data.labels[
-                            train_data_indices], train_data.labels_time[train_data_indices]
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels = \
+                    train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
+                    train_data.edge_ids[train_data_indices], train_data.labels[train_data_indices]
+
                 with torch.no_grad():
                     if args.model_name in ['TGAT', 'CAWN', 'TCL']:
                         # get temporal embedding of source and destination nodes
                         # two Tensors, with shape (batch_size, node_feat_dim)
                         batch_src_node_embeddings, batch_dst_node_embeddings = \
                             model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times,
-                                                                            num_neighbors=args.num_neighbors)
+                                                                              dst_node_ids=batch_dst_node_ids,
+                                                                              node_interact_times=batch_node_interact_times,
+                                                                              num_neighbors=args.num_neighbors)
                     elif args.model_name in ['JODIE', 'DyRep', 'TGN']:
                         # get temporal embedding of source and destination nodes
                         # two Tensors, with shape (batch_size, node_feat_dim)
                         batch_src_node_embeddings, batch_dst_node_embeddings = \
                             model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times,
-                                                                            edge_ids=batch_edge_ids,
-                                                                            edges_are_positive=True,
-                                                                            num_neighbors=args.num_neighbors)
+                                                                              dst_node_ids=batch_dst_node_ids,
+                                                                              node_interact_times=batch_node_interact_times,
+                                                                              edge_ids=batch_edge_ids,
+                                                                              edges_are_positive=True,
+                                                                              num_neighbors=args.num_neighbors)
                     elif args.model_name in ['GraphMixer']:
                         # get temporal embedding of source and destination nodes
                         # two Tensors, with shape (batch_size, node_feat_dim)
                         batch_src_node_embeddings, batch_dst_node_embeddings = \
                             model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times,
-                                                                            num_neighbors=args.num_neighbors,
-                                                                            time_gap=args.time_gap)
-                    elif args.model_name in ['M']:
-                        # get temporal embedding of source and destination nodes
-                        # two Tensors, with shape (batch_size, node_feat_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = \
-                            model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times,
-                                                                            num_neighbors=args.num_neighbors,
-                                                                            time_gap=args.time_gap)
+                                                                              dst_node_ids=batch_dst_node_ids,
+                                                                              node_interact_times=batch_node_interact_times,
+                                                                              num_neighbors=args.num_neighbors,
+                                                                              time_gap=args.time_gap)
                     elif args.model_name in ['DyGFormer']:
                         # get temporal embedding of source and destination nodes
                         # two Tensors, with shape (batch_size, node_feat_dim)
                         batch_src_node_embeddings, batch_dst_node_embeddings = \
                             model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times)
+                                                                              dst_node_ids=batch_dst_node_ids,
+                                                                              node_interact_times=batch_node_interact_times)
                     else:
                         raise ValueError(
                             f"Wrong value for model_name {args.model_name}!")
                 # get predicted probabilities, shape (batch_size, )
-                if args.dataset_name == 'bot' or args.dataset_name == 'bot22':
-                    predicts = model[1](x=torch.cat(
-                        [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0)).squeeze(dim=-1).sigmoid()
-                    labels = torch.from_numpy(np.concatenate(
-                        [batch_labels[0], batch_labels[1]], axis=0)).float().to(predicts.device)
-                else:
-
-                    predicts = model[1](x=batch_src_node_embeddings).squeeze(
-                        dim=-1).sigmoid()
-                    labels = torch.from_numpy(
-                        batch_labels).float().to(predicts.device)
+                predicts = model[1](x=batch_src_node_embeddings).squeeze(
+                    dim=-1).sigmoid()
+                labels = torch.from_numpy(
+                    batch_labels).float().to(predicts.device)
 
                 loss = loss_func(input=predicts, target=labels)
 
@@ -292,41 +270,43 @@ if __name__ == "__main__":
                 logger.info(
                     f'validate {metric_name}, {val_metrics[metric_name]:.4f}')
 
-            if args.model_name in ['JODIE', 'DyRep', 'TGN']:
-                # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
-                val_backup_memory_bank = model[0].memory_bank.backup_memory_bank(
-                )
+            # perform testing once after test_interval_epochs
+            if (epoch + 1) % args.test_interval_epochs == 0:
+                if args.model_name in ['JODIE', 'DyRep', 'TGN']:
+                    # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
+                    val_backup_memory_bank = model[0].memory_bank.backup_memory_bank(
+                    )
 
-            test_total_loss, test_metrics = evaluate_model_node_classification(model_name=args.model_name,
-                                                                                model=model,
-                                                                                dataset=args.dataset_name,
-                                                                                neighbor_sampler=full_neighbor_sampler,
-                                                                                evaluate_idx_data_loader=test_idx_data_loader,
-                                                                                evaluate_data=test_data,
-                                                                                loss_func=loss_func,
-                                                                                num_neighbors=args.num_neighbors,
-                                                                                time_gap=args.time_gap)
+                test_total_loss, test_metrics = evaluate_model_node_classification(model_name=args.model_name,
+                                                                                   model=model,
+                                                                                   dataset=args.dataset_name,
+                                                                                   neighbor_sampler=full_neighbor_sampler,
+                                                                                   evaluate_idx_data_loader=test_idx_data_loader,
+                                                                                   evaluate_data=test_data,
+                                                                                   loss_func=loss_func,
+                                                                                   num_neighbors=args.num_neighbors,
+                                                                                   time_gap=args.time_gap)
 
-            if args.model_name in ['JODIE', 'DyRep', 'TGN']:
-                # reload validation memory bank for saving models
-                # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
-                model[0].memory_bank.reload_memory_bank(
-                    val_backup_memory_bank)
+                if args.model_name in ['JODIE', 'DyRep', 'TGN']:
+                    # reload validation memory bank for saving models
+                    # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
+                    model[0].memory_bank.reload_memory_bank(
+                        val_backup_memory_bank)
 
-            logger.info(f'test loss: {test_total_loss:.4f}')
-            for metric_name in test_metrics.keys():
-                logger.info(
-                    f'test {metric_name}, {test_metrics[metric_name]:.4f}')
+                logger.info(f'test loss: {test_total_loss:.4f}')
+                for metric_name in test_metrics.keys():
+                    logger.info(
+                        f'test {metric_name}, {test_metrics[metric_name]:.4f}')
 
             # select the best model based on all the validate metrics
-            test_metric_indicator = []
-            for metric_name in test_metrics.keys():
-                test_metric_indicator.append(
-                    (metric_name, test_metrics[metric_name], True))
-            early_stop = early_stopping.step(test_metric_indicator, model)
+            val_metric_indicator = []
+            for metric_name in val_metrics.keys():
+                val_metric_indicator.append(
+                    (metric_name, val_metrics[metric_name], True))
+            early_stop = early_stopping.step(val_metric_indicator, model)
 
-            if early_stop[0]:
-                break
+            # if early_stop:
+            #     break
 
         # load the best model
         early_stopping.load_checkpoint(model)

@@ -5,7 +5,7 @@ from models.TCL import TCL
 from models.GraphMixer import GraphMixer
 from models.M import M
 from models.DyGFormer import DyGFormer
-from models.modules import MLPClassifier
+from models.modules import MLPClassifier, MLPClassifier_BN
 from utils.utils import convert_to_gpu
 from torch import nn
 from NcEM.trainer import Trainer
@@ -67,6 +67,12 @@ def em_init(args, node_raw_features, edge_raw_features, train_data, full_neighbo
         node_classifier2 = MLPClassifier(
             input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
         node_classifier = nn.Sequential(node_classifier1, node_classifier2)
+    elif args.mmodel_name =='mlp_bn':
+        node_classifier1 = MLPClassifier_BN(
+            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
+        node_classifier2 = MLPClassifier_BN(
+            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
+        node_classifier = nn.Sequential(node_classifier1, node_classifier2)        
     else:
         raise ValueError(f"Wrong value for mmodel_name {args.mmdel_name}!")
 

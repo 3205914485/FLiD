@@ -121,11 +121,11 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
     node_interact_times = graph_df.ts.values.astype(np.float64)
     edge_ids = graph_df.idx.values.astype(np.longlong)
     if dataset_name=='bot' or dataset_name== 'bot22':
-        labels = graph_df.label1.values
+        labels = graph_df.label_u.values
     else :
         labels = graph_df.label.values
 
-    labels_time = graph_df.last_timestamp.values
+    labels_time = graph_df.last_u_ts.values
 # labels have two lists, for this task we do not use it thus we only take one
 
     full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, 
@@ -252,15 +252,18 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         edge_raw_features = np.concatenate([edge_raw_features, edge_zero_padding], axis=1)
 
     assert NODE_FEAT_DIM == node_raw_features.shape[1] and EDGE_FEAT_DIM == edge_raw_features.shape[1], 'Unaligned feature dimensions after feature padding!'
-
+    double_way_datasets = ['bot','bot22','taobao','yelp']
     src_node_ids = graph_df.u.values.astype(np.longlong)
     dst_node_ids = graph_df.i.values.astype(np.longlong)
     node_interact_times = graph_df.ts.values.astype(np.float64)
     edge_ids = graph_df.idx.values.astype(np.longlong)
-    if dataset_name=='bot' or dataset_name=='bot22':
-        label1 = graph_df.label1.values
-        label2 = graph_df.label2.values
+    if dataset_name in double_way_datasets:
+        label1 = graph_df.label_u.values
+        label2 = graph_df.label_i.values
+        labels_time1 = graph_df.last_u_ts.values
+        labels_time2 = graph_df.last_i_ts.values
         labels=[label1,label2]
+        labels_time = [labels_time1,labels_time2]
     else:
         labels=graph_df.label.values
         labels_time = graph_df.last_timestamp.values
@@ -283,15 +286,18 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
         test_mask = node_interact_times > test_time
 
-    if dataset_name=='bot'or dataset_name=='bot22':
-        full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, edge_ids=edge_ids, labels=labels)
+    if dataset_name in double_way_datasets:
+        full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, edge_ids=edge_ids, 
+                        labels=labels, labels_time = labels_time)
         train_data = Data(src_node_ids=src_node_ids[train_mask], dst_node_ids=dst_node_ids[train_mask],
                         node_interact_times=node_interact_times[train_mask],
-                        edge_ids=edge_ids[train_mask], labels=[label1[train_mask],label2[train_mask]])
+                        edge_ids=edge_ids[train_mask], labels=[label1[train_mask],label2[train_mask]], labels_time = [labels_time1[train_mask],labels_time2[train_mask]])
         val_data = Data(src_node_ids=src_node_ids[val_mask], dst_node_ids=dst_node_ids[val_mask],
-                        node_interact_times=node_interact_times[val_mask], edge_ids=edge_ids[val_mask], labels=[label1[val_mask],label2[val_mask]])
+                        node_interact_times=node_interact_times[val_mask], edge_ids=edge_ids[val_mask], labels=[label1[val_mask],label2[val_mask]],
+                        labels_time = [labels_time1[val_mask],labels_time2[val_mask]])
         test_data = Data(src_node_ids=src_node_ids[test_mask], dst_node_ids=dst_node_ids[test_mask],
-                        node_interact_times=node_interact_times[test_mask], edge_ids=edge_ids[test_mask],labels=[label1[test_mask],label2[test_mask]])
+                        node_interact_times=node_interact_times[test_mask], edge_ids=edge_ids[test_mask],labels=[label1[test_mask],label2[test_mask]],
+                        labels_time = [labels_time1[test_mask],labels_time2[test_mask]])
     else:
         full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, edge_ids=edge_ids, 
                          labels=labels, labels_time = labels_time)
@@ -304,7 +310,7 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         test_data = Data(src_node_ids=src_node_ids[test_mask], dst_node_ids=dst_node_ids[test_mask],
                         node_interact_times=node_interact_times[test_mask], edge_ids=edge_ids[test_mask],labels=labels[test_mask], 
                         labels_time = labels_time[test_mask])
-  
+        
     return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data
 
 
@@ -406,7 +412,7 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
                         labels_time = [labels_time1[val_mask],labels_time2[val_mask]])
         test_data = Data(src_node_ids=src_node_ids[test_mask], dst_node_ids=dst_node_ids[test_mask],
                         node_interact_times=node_interact_times[test_mask], edge_ids=edge_ids[test_mask],labels=[label1[test_mask],label2[test_mask]],
-                        labels_time = [labels_time1[val_mask],labels_time2[val_mask]])
+                        labels_time = [labels_time1[test_mask],labels_time2[test_mask]])
     else:
         full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, edge_ids=edge_ids, 
                          labels=labels, labels_time = labels_time)

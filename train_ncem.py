@@ -67,7 +67,8 @@ if __name__ == "__main__":
         "full_idx_data_loader": full_idx_data_loader,
         "train_idx_data_loader": train_idx_data_loader,
         "val_idx_data_loader": val_idx_data_loader,
-        "test_idx_data_loader": test_idx_data_loader
+        "test_idx_data_loader": test_idx_data_loader,
+        "dataset_name": args.dataset_name
     }
 
     Eval_metric_all_runs, Etest_metric_all_runs, Mval_metric_all_runs, Mtest_metric_all_runs = [], [], [], []
@@ -116,10 +117,10 @@ if __name__ == "__main__":
 
         if args.dataset_name in double_way_datasets:
             pseudo_labels = torch.zeros(
-                num_interactions, 2, device=args.device)
+                2, num_interactions, device=args.device)
         else:
             pseudo_labels = torch.zeros(
-                num_interactions, 1, device=args.device)
+                1, num_interactions, device=args.device)
 
         base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict = {}, {}, {}, {}, {}, {}
        
@@ -144,7 +145,7 @@ if __name__ == "__main__":
                       dst_node_embeddings=dst_node_embeddings)
         
         pseudo_labels, num_targets = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th)
+            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, use_pseudo_entropy=args.use_entropy,double_way_dataset=double_way_datasets)
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
@@ -184,7 +185,8 @@ if __name__ == "__main__":
                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_entropy=pseudo_entropy)
             
             pseudo_labels, num_targets = update_pseudo_labels(
-                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th)
+                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, use_pseudo_entropy=args.use_entropy,double_way_dataset=double_way_datasets)
+
             logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
             
             if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:

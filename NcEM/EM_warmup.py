@@ -44,7 +44,10 @@ def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node
     src_node_embeddings.copy_(new_src_embeddings)
     dst_node_embeddings.copy_(new_dst_embeddings)
     logger.info("Warm-up-2 : Start training node classification for decoder\n")
-    save_model_name = f'ncem_{Etrainer.model_name}'
+    if args.mmodel_name =='mlp':
+        save_model_name = f'ncem_{Etrainer.model_name}'
+    else:
+        save_model_name = f'ncem_{Etrainer.model_name}_{Mtrainer.model_name}'
     save_model_folder = f"./saved_models/ncem/M/warmup/{args.dataset_name}/{args.seed}/{save_model_name}/"
     val_total_loss, val_metrics, test_total_loss, test_metrics =\
         train_model_node_classification_withembeddings(

@@ -181,9 +181,10 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
         for batch_idx, evaluate_data_indices in enumerate(evaluate_idx_data_loader_tqdm):
             evaluate_data_indices = evaluate_data_indices.numpy()
             if dataset =='bot' or dataset=='bot22':
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
                     evaluate_data.src_node_ids[evaluate_data_indices],  evaluate_data.dst_node_ids[evaluate_data_indices], \
-                    evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], [evaluate_data.labels[0][evaluate_data_indices],evaluate_data.labels[1][evaluate_data_indices]]
+                    evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], [evaluate_data.labels[0][evaluate_data_indices],evaluate_data.labels[1][evaluate_data_indices]], \
+                    [evaluate_data.labels_time[0][evaluate_data_indices],evaluate_data.labels_time[1][evaluate_data_indices]]
             else:
                 batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
                     evaluate_data.src_node_ids[evaluate_data_indices],  evaluate_data.dst_node_ids[evaluate_data_indices], \
@@ -240,11 +241,15 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
             if dataset=='bot' or dataset=='bot22':
                 predicts = model[1](x=torch.cat([batch_src_node_embeddings,batch_dst_node_embeddings],dim=0)).squeeze(dim=-1).sigmoid()
                 labels = torch.from_numpy(np.concatenate([batch_labels[0],batch_labels[1]],axis=0)).float().to(predicts.device)
+                mask_gt_src = torch.from_numpy(
+                    batch_node_interact_times == batch_labels_times[0]).to(torch.bool)
+                mask_gt_dst = torch.from_numpy(
+                    batch_node_interact_times == batch_labels_times[1]).to(torch.bool)
+                mask = torch.cat([mask_gt_src, mask_gt_dst],dim=0).squeeze(dim=-1)
             else :
                 predicts = model[1](x=batch_src_node_embeddings).squeeze(dim=-1).sigmoid()
                 labels = torch.from_numpy(batch_labels).float().to(predicts.device) 
-
-            mask = torch.from_numpy(batch_node_interact_times == batch_labels_times).to(torch.bool)
+                mask = torch.from_numpy(batch_node_interact_times == batch_labels_times).to(torch.bool)
             
             # 根据mask筛选出有效的预测和标签
             filtered_predicts = predicts[mask]

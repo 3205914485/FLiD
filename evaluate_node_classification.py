@@ -105,16 +105,18 @@ if __name__ == "__main__":
                                          max_input_sequence_length=args.max_input_sequence_length, device=args.device)
         else:
             raise ValueError(f"Wrong value for model_name {args.model_name}!")
-        node_classifier = MLPClassifier(input_dim=node_raw_features.shape[1], dropout=args.dropout)
+        node_classifier1 = MLPClassifier(input_dim=node_raw_features.shape[1], dropout=args.dropout)
+        node_classifier2 = MLPClassifier(input_dim=node_raw_features.shape[1], dropout=args.dropout)
+        node_classifier = nn.Sequential(node_classifier1, node_classifier2)
         model = nn.Sequential(dynamic_backbone, node_classifier)
         logger.info(f'model -> {model}')
         logger.info(f'model name: {args.model_name}, #parameters: {get_parameter_sizes(model) * 4} B, '
                     f'{get_parameter_sizes(model) * 4 / 1024} KB, {get_parameter_sizes(model) * 4 / 1024 / 1024} MB.')
 
         # load the saved model
-        load_model_folder = f"./saved_models/{args.model_name}/rt_wiki/{args.load_model_name}"
+        load_model_folder = f"./saved_models/ncem/EM/0826_LT_1d_tgat_wiki_0.9_02/wikipedia/{args.seed}/ncem_TGAT"
         early_stopping = EarlyStopping(patience=0, save_model_folder=load_model_folder,
-                                       save_model_name=args.load_model_name, logger=logger, model_name=args.model_name)
+                                       save_model_name='ncem_TGAT', logger=logger, model_name=args.model_name)
         early_stopping.load_checkpoint(model, map_location='cpu')
 
         model = convert_to_gpu(model, device=args.device)

@@ -45,22 +45,32 @@ def log_average_metrics(logger, metric_all_runs, prefix):
                     f'± {np.std(metric_values, ddof=1):.4f}')
 
 
-def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold):
-
-
+def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pseudo_entropy, double_way_dataset):
+        
     pseudo_entropy_list = list(pseudo_entropy)
     num_targets = len(pseudo_entropy_list)
-    pseudo_entropy_list = [torch.squeeze(pseudo_confidence[:,0] - pseudo_confidence[:,1]) for pseudo_confidence in pseudo_entropy_list]
-    pseudo_entropy_score = torch.abs(torch.sum(torch.stack(pseudo_entropy_list),dim=0))
-    mask_entropy = pseudo_entropy_score > threshold * num_targets
-    pseudo_labels[~mask_entropy] = -1
-    true_labels = data['full_data'].labels.astype('float32')
-    labels_times = data['full_data'].labels_time
-    interact_times = data['full_data'].node_interact_times
+    if use_pseudo_entropy:
+        pseudo_entropy_list = [torch.squeeze(pseudo_confidence[:,0] - pseudo_confidence[:,1]) for pseudo_confidence in pseudo_entropy_list]
+        pseudo_entropy_score = torch.abs(torch.sum(torch.stack(pseudo_entropy_list),dim=0))
+        mask_entropy = pseudo_entropy_score > threshold * num_targets
+        pseudo_labels[~mask_entropy] = -1
 
-    mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
-
-    pseudo_labels[mask_gt] = torch.from_numpy(
-        true_labels[mask_gt]).unsqueeze(1).to(pseudo_labels.device)
+    if data['dataset_name'] in double_way_dataset:
+        true_labels = data['full_data'].labels
+        labels_times = data['full_data'].labels_time
+        interact_times = data['full_data'].node_interact_times
+        mask_gt_u = torch.from_numpy(interact_times == labels_times[0]).to(torch.bool) 
+        mask_gt_i = torch.from_numpy(interact_times == labels_times[1]).to(torch.bool)
+        pseudo_labels[0,mask_gt_u] = torch.from_numpy(
+            true_labels[0][mask_gt_u].astype('float32')).to(pseudo_labels.device)
+        pseudo_labels[1,mask_gt_i] = torch.from_numpy(
+            true_labels[1][mask_gt_i].astype('float32')).to(pseudo_labels.device)
+    else:
+        true_labels = data['full_data'].labels
+        labels_times = data['full_data'].labels_time
+        interact_times = data['full_data'].node_interact_times
+        mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
+        pseudo_labels[mask_gt] = torch.from_numpy(
+            true_labels[mask_gt].astype('float32')).unsqueeze(1).to(pseudo_labels.device)
 
     return pseudo_labels, num_targets
