@@ -39,7 +39,7 @@ class Trainer(object):
         self.args = args
         self.model = model
         self.model_name = model_name
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(weight=torch.from_numpy(np.array([1.0,args.negative_weight])).float().to(args.device))
         self.parameters = [p for p in self.model.parameters()]
         logger.info(f'model -> {model}')
         logger.info(f'model name: {model_name}, #parameters: {get_parameter_sizes(model) * 4} B, '

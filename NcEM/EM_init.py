@@ -66,13 +66,13 @@ def em_init(args, node_raw_features, edge_raw_features, train_data, full_neighbo
             input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
         node_classifier2 = MLPClassifier(
             input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier = nn.Sequential(node_classifier1, node_classifier2)
+        node_classifier = nn.ModuleList([node_classifier1, node_classifier2])
     elif args.mmodel_name =='mlp_bn':
         node_classifier1 = MLPClassifier_BN(
             input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
         node_classifier2 = MLPClassifier_BN(
             input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier = nn.Sequential(node_classifier1, node_classifier2)        
+        node_classifier = nn.ModuleList([node_classifier1, node_classifier2])        
     else:
         raise ValueError(f"Wrong value for mmodel_name {args.mmdel_name}!")
 

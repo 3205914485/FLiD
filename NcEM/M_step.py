@@ -34,7 +34,7 @@ from models.modules import MergeLayer
 from NcEM.trainer import Trainer
 from NcEM.trainer import Trainer
 
-double_way_dataset = ['bot', 'bot22', 'taobao', 'yelp']
+double_way_datasets = ['bot','bot22','dgraph','dsub']
 
 
 def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset: str, src_node_embeddings: torch.tensor,
@@ -50,7 +50,7 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
             evaluate_idx_data_loader, ncols=120)
         for batch_idx, evaluate_data_indices in enumerate(evaluate_idx_data_loader_tqdm):
             evaluate_data_indices = evaluate_data_indices.numpy()
-            if dataset == 'bot' or dataset == 'bot22':
+            if dataset in double_way_datasets:
                 batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
                     evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], \
                     [evaluate_data.labels[0][evaluate_data_indices],evaluate_data.labels[1][evaluate_data_indices]], \
@@ -64,18 +64,18 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
                 src_node_embeddings[batch_edge_ids-1], dst_node_embeddings[batch_edge_ids-1]
 
             # get predicted probabilities, shape (batch_size, )
-            if dataset in double_way_dataset:
+            if dataset in double_way_datasets:
                 predicts = model(x=torch.cat(
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.from_numpy(np.concatenate(
                     [batch_labels[0], batch_labels[1]], axis=0)).long().to(predicts.device)
                 mask_gt_src = torch.from_numpy(
-                    batch_node_interact_times == batch_labels_times[0]).to(torch.bool)
+                    (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                 mask_gt_dst = torch.from_numpy(
-                    batch_node_interact_times == batch_labels_times[1]).to(torch.bool)
+                    (batch_node_interact_times == batch_labels_times[1]) & (np.isin(batch_labels[1],[0,1]))).to(torch.bool)
                 mask = torch.cat([mask_gt_src, mask_gt_dst],dim=0).squeeze(dim=-1)
                 probabilities = torch.softmax(predicts, dim=1)
-                pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,],probabilities[probabilities.shape[0]//2:,]],dim=0)
+                pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
                 pseudo_entropy_list_list.append(pseudo_entropy_batch.detach())
             else:
                 predicts = model(x=batch_src_node_embeddings)
@@ -84,7 +84,7 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
                 mask = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
                 pseudo_entropy_list_list.append(
-                    torch.softmax(predicts, dim=1).detach())
+                    torch.softmax(predicts, dim=1).detach()[0])
             filtered_predicts = predicts[mask]
             filtered_labels = labels[mask]
 
@@ -107,8 +107,6 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
         evaluate_total_loss /= (batch_count)
         evaluate_y_trues = torch.cat(evaluate_y_trues, dim=0)
         evaluate_y_predicts = torch.cat(evaluate_y_predicts, dim=0)
-        # torch.save(evaluate_y_predicts, os.path.join('/data3/whr/zst/Dyg_Nc/idea/DyGlib/some_data', f"predicts.pt"))
-        # torch.save(evaluate_y_trues, os.path.join('/data3/whr/zst/Dyg_Nc/idea/DyGlib/some_data', f"labels.pt"))
         evaluate_metrics = get_node_classification_metrics_em(
             predicts=evaluate_y_predicts, labels=evaluate_y_trues)
 
@@ -140,13 +138,13 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
     pseudo_entropy_list = []
     if train:
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
-        best_acc, best_epoch = 0.0, 0
+        best_metrics, best_epoch = {'roc_auc': 0.0, 'accuracy': 0.0}, 0
         for epoch in range(num_epochs):
 
             train_total_loss, train_y_trues, train_y_predicts, batch_count, pseudo_entropy_list_list = 0.0, [], [], 0.0, []
             for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
                 train_data_indices = train_data_indices.numpy()
-                if args.dataset_name in double_way_dataset:
+                if args.dataset_name in double_way_datasets:
                     batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
                         train_data.node_interact_times[train_data_indices], train_data.edge_ids[train_data_indices], \
                         [train_data.labels[0][train_data_indices], train_data.labels[1][train_data_indices]], \
@@ -160,19 +158,19 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                 batch_src_node_embeddings, batch_dst_node_embeddings = \
                     src_node_embeddings[batch_edge_ids -1], dst_node_embeddings[batch_edge_ids-1]
 
-                if args.dataset_name in double_way_dataset:
+                if args.dataset_name in double_way_datasets:
                     predicts = model(x=torch.cat(
                         [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                     labels = torch.from_numpy(np.concatenate(
                         [batch_labels[0], batch_labels[1]], axis=0)).to(torch.long).to(predicts.device)
                     mask_gt_src = torch.from_numpy(
-                        batch_node_interact_times == batch_labels_times[0]).to(torch.bool)
+                        (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                     mask_gt_dst = torch.from_numpy(
-                        batch_node_interact_times == batch_labels_times[1]).to(torch.bool)
+                        (batch_node_interact_times == batch_labels_times[1]) & (np.isin(batch_labels[1],[0,1]))).to(torch.bool)
                     mask = torch.cat(
                         [mask_gt_src, mask_gt_dst], dim=0).squeeze(dim=-1)
                     probabilities = torch.softmax(predicts, dim=1)
-                    pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,],probabilities[probabilities.shape[0]//2:,]],dim=0)
+                    pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
                     pseudo_entropy_list_list.append(pseudo_entropy_batch.detach())
                 else:
                     predicts = model(x=batch_src_node_embeddings)
@@ -181,7 +179,7 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                     mask = torch.from_numpy(
                         batch_node_interact_times == batch_labels_times).to(torch.bool)
                     pseudo_entropy_list_list.append(
-                            torch.softmax(predicts, dim=1).detach())    
+                            torch.softmax(predicts, dim=1).detach()[0])    
                 
                 filtered_predicts = predicts[mask]
                 filtered_labels = labels[mask]
@@ -249,17 +247,18 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                 logger.info(
                     f'test {metric_name}: {test_metrics[metric_name]:.4f}')
 
-                # select the best model based on all the validate metrics
-                test_metric_indicator = []
+            test_metric_indicator = []
             for metric_name in test_metrics.keys():
                 test_metric_indicator.append(
                     (metric_name, test_metrics[metric_name], True))
             early_stop = early_stopping.step(test_metric_indicator, model)
 
-            if test_metrics['roc_auc'] > best_acc:
-                best_acc = test_metrics['roc_auc']
+            if test_metrics['roc_auc'] > best_metrics['roc_auc']:
+                best_metrics = test_metrics
                 best_epoch = epoch
-            logger.info(f'Best test {metric_name}: {best_acc:.4f}')
+            for metric_name in best_metrics.keys():
+                logger.info(
+                    f'best test {metric_name}: {best_metrics[metric_name]:.4f}')
 
             pseudo_entropy_list.append(torch.cat(pseudo_entropy_list_list, dim=1))
             if early_stop[0]:
@@ -294,7 +293,7 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
         full_data_indices = full_data_indices.numpy()
 
         with torch.no_grad():
-            if args.dataset_name == 'bot' or args.dataset_name == 'bot22':
+            if args.dataset_name in double_way_datasets:
                 batch_node_interact_times, batch_edge_ids, batch_labels = \
                     full_data.node_interact_times[full_data_indices], full_data.edge_ids[full_data_indices], \
                     [full_data.labels[0][full_data_indices],
@@ -308,7 +307,7 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                 src_node_embeddings[batch_edge_ids -
                                     1], dst_node_embeddings[batch_edge_ids-1]
 
-            if args.dataset_name in double_way_dataset:
+            if args.dataset_name in double_way_datasets:
                 predicts = model(x=torch.cat(
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
 
@@ -317,19 +316,19 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
         probabilities = torch.softmax(predicts, dim=1)
         _, binary_predicts = torch.max(probabilities, dim=1)
 
-        if args.dataset_name in double_way_dataset:
+        if args.dataset_name in double_way_datasets:
             binary_predicts = torch.stack([binary_predicts[:binary_predicts.shape[0]//2],binary_predicts[binary_predicts.shape[0]//2:]],dim=0)
             pseudo_labels_list.append(binary_predicts.to(torch.long))
-            pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,],probabilities[probabilities.shape[0]//2:,]],dim=0)
+            pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
             confidence_list.append(pseudo_entropy_batch)
         else:
             pseudo_labels_list.append(binary_predicts.to(torch.long))
-            confidence_list.append(probabilities)
+            confidence_list.append(probabilities[0])
 
     if not train:
         pseudo_entropy_list.append(torch.cat(confidence_list, dim=1))
         best_epoch = 0
-    if args.dataset_name in double_way_dataset: 
+    if args.dataset_name in double_way_datasets: 
         new_labels = torch.cat(pseudo_labels_list, dim=1).detach()
     else:
         new_labels = torch.cat(pseudo_labels_list, dim=0).detach().unsqueeze(dim=-1)

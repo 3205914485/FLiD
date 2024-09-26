@@ -78,20 +78,20 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
     """
     # Load data and train val test split
     if dataset_name=='bot22' and not is_pretrain:
-        NODE_FEAT_DIM = EDGE_FEAT_DIM = 776
+        NODE_FEAT_DIM = EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name)) 
     
     elif dataset_name=='bot22' and  is_pretrain:
-        NODE_FEAT_DIM = 172
-        EDGE_FEAT_DIM = 776
+        NODE_FEAT_DIM = 778
+        EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node_pretrained.npy'.format(dataset_name, dataset_name)) 
-    elif dataset_name in ['zhk','zhk2']:
-        NODE_FEAT_DIM = 768
-        EDGE_FEAT_DIM = 1
+    elif dataset_name in ['bot']:
+        NODE_FEAT_DIM = 778
+        EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))     
@@ -120,7 +120,7 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
     dst_node_ids = graph_df.i.values.astype(np.longlong)
     node_interact_times = graph_df.ts.values.astype(np.float64)
     edge_ids = graph_df.idx.values.astype(np.longlong)
-    if dataset_name=='bot' or dataset_name== 'bot22':
+    if dataset_name=='bot' or dataset_name== 'bot22' or dataset_name=='dsub' or dataset_name=='dgraph':
         labels = graph_df.label_u.values
     else :
         labels = graph_df.label.values
@@ -215,7 +215,7 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
     return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, new_node_val_data, new_node_test_data
 
 
-def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio: float,is_pretrained:bool=False, new_spilt: bool=False):
+def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio: float,is_pretrained:bool=False, new_spilt: bool=True):
     """
     generate data for node classification task
     :param dataset_name: str, dataset name
@@ -226,16 +226,21 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
     """
     # Load data and train val test split
     if dataset_name=='bot22' and not is_pretrained:
-        NODE_FEAT_DIM = EDGE_FEAT_DIM = 776
+        NODE_FEAT_DIM = EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name)) 
     elif dataset_name=='bot22' and  is_pretrained:
-        NODE_FEAT_DIM = 172
-        EDGE_FEAT_DIM = 776
+        NODE_FEAT_DIM = 778
+        EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node_pretrained.npy'.format(dataset_name, dataset_name)) 
+    elif dataset_name =='bot':
+        NODE_FEAT_DIM = EDGE_FEAT_DIM = 778
+        graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
+        edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
+        node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))
     else:
         NODE_FEAT_DIM = EDGE_FEAT_DIM = 172
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
@@ -252,7 +257,7 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         edge_raw_features = np.concatenate([edge_raw_features, edge_zero_padding], axis=1)
 
     assert NODE_FEAT_DIM == node_raw_features.shape[1] and EDGE_FEAT_DIM == edge_raw_features.shape[1], 'Unaligned feature dimensions after feature padding!'
-    double_way_datasets = ['bot','bot22','taobao','yelp']
+    double_way_datasets = ['bot','bot22','dgraph','dsub']
     src_node_ids = graph_df.u.values.astype(np.longlong)
     dst_node_ids = graph_df.i.values.astype(np.longlong)
     node_interact_times = graph_df.ts.values.astype(np.float64)
@@ -272,19 +277,55 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
 
     if new_spilt:
         # spilt based on the gt
+        if dataset_name in double_way_datasets:
 
-        ground_truth_times = node_interact_times[node_interact_times == labels_time]
-        val_time, test_time = list(np.quantile(ground_truth_times, [(1 - val_ratio - test_ratio), (1 - test_ratio)]))
-        train_mask = node_interact_times <= val_time
-        val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
-        test_mask = node_interact_times > test_time
+            merged_node_interact_times = np.zeros(shape=(len(node_interact_times)*2,))
+            merged_node_interact_times[0::2] = node_interact_times
+            merged_node_interact_times[1::2] = node_interact_times
+            merged_labels_time = np.zeros(shape=(len(labels_time[0])*2,))
+            merged_labels_time[0::2] = labels_time[0]
+            merged_labels_time[1::2] = labels_time[1]
+            merged_labels = np.zeros(shape=(len(labels[0])*2,))
+            merged_labels[0::2] = labels[0]
+            merged_labels[1::2] = labels[1]
+            merged_ids = np.zeros(shape=(len(src_node_ids)*2,))
+            merged_ids[0::2] = src_node_ids
+            merged_ids[1::2] = dst_node_ids
 
+            if dataset_name in ['dsub', 'dgraph']:
+                labels_mask = np.isin(merged_labels, [0, 1])
+                times_mask = merged_node_interact_times == merged_labels_time
+                mask = labels_mask & times_mask
+                ground_truth_times = merged_node_interact_times[mask]
+            else:    
+                mask = merged_node_interact_times == merged_labels_time
+                ground_truth_times = merged_node_interact_times[mask]
+                
+            val_time, test_time = list(np.quantile(ground_truth_times, [(1 - val_ratio - test_ratio), (1 - test_ratio)]))
+            train_mask = node_interact_times <= val_time
+            val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
+            test_mask = node_interact_times > test_time
+            train_nodes_mask = merged_node_interact_times <= val_time
+            train_nodes = merged_ids[train_nodes_mask & mask].astype(int)
+ 
+        else :
+            mask = node_interact_times == labels_time
+            ground_truth_times = node_interact_times[mask]
+            val_time, test_time = list(np.quantile(ground_truth_times, [(1 - val_ratio - test_ratio), (1 - test_ratio)]))
+            train_mask = node_interact_times <= val_time
+            val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
+            test_mask = node_interact_times > test_time
+            train_nodes_mask = node_interact_times <= val_time
+            train_nodes = merged_ids[train_nodes_mask & mask].astype(int)        
+        
     else:
         # get the timestamp of validate and test set
         val_time, test_time = list(np.quantile(graph_df.ts, [(1 - val_ratio - test_ratio), (1 - test_ratio)]))
         train_mask = node_interact_times <= val_time
         val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
         test_mask = node_interact_times > test_time
+    
+    train_nodes = np.unique(train_nodes)
 
     if dataset_name in double_way_datasets:
         full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, edge_ids=edge_ids, 
@@ -311,7 +352,7 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
                         node_interact_times=node_interact_times[test_mask], edge_ids=edge_ids[test_mask],labels=labels[test_mask], 
                         labels_time = labels_time[test_mask])
         
-    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data
+    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes
 
 
 def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pretrained: bool=True, new_spilt: bool=False):
@@ -325,19 +366,19 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
     """
     # Load data and train val test split
     if dataset_name=='bot22' and not is_pretrained:
-        NODE_FEAT_DIM = EDGE_FEAT_DIM = 776
+        NODE_FEAT_DIM = EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name)) 
     elif dataset_name=='bot22' and  is_pretrained:
-        NODE_FEAT_DIM = 172
-        EDGE_FEAT_DIM = 776
+        NODE_FEAT_DIM = 778
+        EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node_pretrained.npy'.format(dataset_name, dataset_name)) 
-    elif dataset_name=='yelp' :
-        NODE_FEAT_DIM = 300
-        EDGE_FEAT_DIM = 172
+    elif dataset_name=='bot' :
+        NODE_FEAT_DIM = 778
+        EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))     
@@ -364,7 +405,7 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
     node_interact_times = graph_df.ts.values.astype(np.float64)
     edge_ids = graph_df.idx.values.astype(np.longlong)
 
-    double_way_datasets = ['bot','bot22','taobao','yelp']
+    double_way_datasets = ['bot','bot22','dgraph','dsub']
 
     if dataset_name in double_way_datasets :
         label1 = graph_df.label_u.values
@@ -382,24 +423,56 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
     if new_spilt:
         # spilt based on the gt
         if dataset_name in double_way_datasets:
-            ground_truth_times = node_interact_times[node_interact_times == labels_time[0]]
-        else :
-            ground_truth_times = node_interact_times[node_interact_times == labels_time]
-        val_time, test_time = list(np.quantile(ground_truth_times, [(1 - val_ratio - test_ratio), (1 - test_ratio)]))
-        train_mask = node_interact_times <= val_time
-        val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
-        test_mask = node_interact_times > test_time
-        val_offest = sum(train_mask)
-        test_offest = val_offest+sum(val_mask)
+
+            merged_node_interact_times = np.zeros(shape=(len(node_interact_times)*2,))
+            merged_node_interact_times[0::2] = node_interact_times
+            merged_node_interact_times[1::2] = node_interact_times
+            merged_labels_time = np.zeros(shape=(len(labels_time[0])*2,))
+            merged_labels_time[0::2] = labels_time[0]
+            merged_labels_time[1::2] = labels_time[1]
+            merged_labels = np.zeros(shape=(len(labels[0])*2,))
+            merged_labels[0::2] = labels[0]
+            merged_labels[1::2] = labels[1]
+            merged_ids = np.zeros(shape=(len(src_node_ids)*2,))
+            merged_ids[0::2] = src_node_ids
+            merged_ids[1::2] = dst_node_ids
+
+            if dataset_name in ['dsub', 'dgraph']:
+                labels_mask = np.isin(merged_labels, [0, 1])
+                times_mask = merged_node_interact_times == merged_labels_time
+                mask = labels_mask & times_mask
+                ground_truth_times = merged_node_interact_times[mask]
+            else:    
+                mask = merged_node_interact_times == merged_labels_time
+                ground_truth_times = merged_node_interact_times[mask]
         
+            val_time, test_time = list(np.quantile(ground_truth_times, [(1 - val_ratio - test_ratio), (1 - test_ratio)]))
+            train_mask = node_interact_times <= val_time
+            val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
+            test_mask = node_interact_times > test_time
+            train_nodes_mask = merged_node_interact_times <= val_time
+            train_nodes = merged_ids[train_nodes_mask & mask].astype(int)
+            
+        else :
+            mask = node_interact_times == labels_time
+            ground_truth_times = node_interact_times[mask]
+            val_time, test_time = list(np.quantile(ground_truth_times, [(1 - val_ratio - test_ratio), (1 - test_ratio)]))
+            train_mask = node_interact_times <= val_time
+            val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
+            test_mask = node_interact_times > test_time
+            train_nodes_mask = node_interact_times <= val_time
+            train_nodes = merged_ids[train_nodes_mask & mask].astype(int)    
+ 
     else:
         # get the timestamp of validate and test set
         val_time, test_time = list(np.quantile(graph_df.ts, [(1 - val_ratio - test_ratio), (1 - test_ratio)]))
         train_mask = node_interact_times <= val_time
         val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
         test_mask = node_interact_times > test_time
-        val_offest = sum(train_mask)
-        test_offest = val_offest+sum(val_mask)
+
+    val_offest = sum(train_mask)
+    test_offest = val_offest+sum(val_mask)
+    train_nodes = np.unique(train_nodes)
 
     if dataset_name in double_way_datasets:
         full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, edge_ids=edge_ids, 
@@ -434,4 +507,4 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
     print("The test dataset has {} interactions, involving {} different nodes".format(
         test_data.num_interactions, test_data.num_unique_nodes)) 
     
-    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, full_data.num_interactions, NODE_FEAT_DIM, val_offest, test_offest 
+    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, full_data.num_interactions, NODE_FEAT_DIM, val_offest, test_offest, train_nodes 

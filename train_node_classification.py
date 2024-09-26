@@ -26,10 +26,10 @@ from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_args
 
 cpu_num = 2
-os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
+os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa 
 os.environ["MKL_NUM_THREADS"] = str(cpu_num)  # noqa
 torch.set_num_threads(cpu_num)
-
+double_way_datasets = ['bot','bot22','dgraph','dsub']
 if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
@@ -38,9 +38,9 @@ if __name__ == "__main__":
     args = get_node_classification_args()
 
     # get data for training, validation and testing
-    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data = \
+    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes = \
         get_node_classification_data(
-            dataset_name=args.dataset_name, val_ratio=args.val_ratio, test_ratio=args.test_ratio)
+            dataset_name=args.dataset_name, val_ratio=args.val_ratio, test_ratio=args.test_ratio, new_spilt=args.new_spilt)
 
     # initialize validation and test neighbor sampler to retrieve temporal graph
     full_neighbor_sampler = get_neighbor_sampler(data=full_data, sample_neighbor_strategy=args.sample_neighbor_strategy,
@@ -161,7 +161,7 @@ if __name__ == "__main__":
         early_stopping = EarlyStopping(patience=args.patience, save_model_folder=save_model_folder,
                                        save_model_name=args.save_model_name, logger=logger, model_name=args.model_name)
 
-        loss_func = nn.BCELoss()
+        loss_func = nn.CrossEntropyLoss()
 
         # set the dynamic_backbone in evaluation mode
         model[0].eval()
@@ -181,7 +181,7 @@ if __name__ == "__main__":
             train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
             for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
                 train_data_indices = train_data_indices.numpy()
-                if args.dataset_name == 'bot' or args.dataset_name == 'bot22':
+                if args.dataset_name in double_way_datasets :
                     batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels = \
                         train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
                         train_data.edge_ids[train_data_indices], [
@@ -239,17 +239,20 @@ if __name__ == "__main__":
                         raise ValueError(
                             f"Wrong value for model_name {args.model_name}!")
                 # get predicted probabilities, shape (batch_size, )
-                if args.dataset_name == 'bot' or args.dataset_name == 'bot22':
+                if args.dataset_name in double_way_datasets :
+                    mask_train_src = np.isin(batch_src_node_ids, train_nodes)
+                    mask_train_dst = np.isin(batch_dst_node_ids, train_nodes) 
+                    mask_src = np.isin(batch_labels[0],[0,1]) & mask_train_src
+                    mask_dst = np.isin(batch_labels[1],[0,1]) & mask_train_dst
                     predicts = model[1](x=torch.cat(
-                        [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0)).squeeze(dim=-1).sigmoid()
+                        [batch_src_node_embeddings[mask_src], batch_dst_node_embeddings[mask_dst]], dim=0)).squeeze(dim=-1)
                     labels = torch.from_numpy(np.concatenate(
-                        [batch_labels[0], batch_labels[1]], axis=0)).float().to(predicts.device)
+                        [batch_labels[0][mask_src], batch_labels[1][mask_dst]], axis=0)).to(torch.long).to(predicts.device)
                 else:
-
-                    predicts = model[1](x=batch_src_node_embeddings).squeeze(
-                        dim=-1).sigmoid()
+                    mask_train_src = np.isin(batch_edge_ids[0],train_nodes)
+                    predicts = model[1](x=batch_src_node_embeddings[mask_train_src]).squeeze(dim=-1)
                     labels = torch.from_numpy(
-                        batch_labels).float().to(predicts.device)
+                        batch_labels[mask_train_src]).to(torch.long).to(predicts.device)
 
                 loss = loss_func(input=predicts, target=labels)
 

@@ -40,11 +40,11 @@ if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
 
-    double_way_datasets = ['bot', 'bot22', 'taobao', 'yelp']
+    double_way_datasets = ['bot', 'bot22', 'dsub', 'dgraph']
     # get arguments
     args = get_node_classification_em_args()
     # get data for training, validation and testing
-    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, num_node_features, val_offest, test_offest = \
+    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, num_node_features, val_offest, test_offest, train_nodes = \
         get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt)
 
@@ -67,6 +67,7 @@ if __name__ == "__main__":
         "edge_raw_features": edge_raw_features,
         "full_data": full_data,
         "train_data": train_data,
+        "train_nodes": train_nodes, # for transductive
         "val_data": val_data,
         "val_offest": val_offest,
         "test_data": test_data,

@@ -70,7 +70,7 @@ class MergeLayer(nn.Module):
 
 
 class MLPClassifier(nn.Module):
-    def __init__(self, input_dim: int, dropout: float = 0.1, num_classes: int = 1):
+    def __init__(self, input_dim: int, dropout: float = 0.1, num_classes: int = 2):
         """
         Multi-Layer Perceptron Classifier.
         :param input_dim: int, dimension of input

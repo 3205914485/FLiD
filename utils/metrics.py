@@ -1,5 +1,5 @@
 import torch
-from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.metrics import average_precision_score, roc_auc_score, f1_score
 import numpy as np
 from sklearn.metrics import accuracy_score
 
@@ -28,17 +28,17 @@ def get_node_classification_metrics_em(predicts: torch.Tensor, labels: torch.Ten
     :return:
         Dictionary of metrics {'metric_name_1': metric_1, ...}
     """
+    predicts = torch.softmax(predicts,dim=1)
     predicts = predicts[:,1].cpu().detach().numpy()
     labels = labels.cpu().numpy()
 
-    unique_labels = np.unique(labels)
-    if len(unique_labels) == 1:
-        binary_predicts = (predicts >= 0.5).astype(int)  
-        accuracy = accuracy_score(y_true=labels, y_pred=binary_predicts)
-        return {'accuracy': accuracy}
-    else:
+    binary_predicts = (predicts >= 0.5).astype(int)  
+    accuracy = accuracy_score(y_true=labels, y_pred=binary_predicts)
+    if len(np.unique(labels)) == 1:
+        roc_auc = 0.0
+    else :
         roc_auc = roc_auc_score(y_true=labels, y_score=predicts)
-        return {'roc_auc': roc_auc}
+    return {'roc_auc': roc_auc, 'accuracy': accuracy}
     
 def get_node_classification_metrics(predicts: torch.Tensor, labels: torch.Tensor):
     """
@@ -48,9 +48,15 @@ def get_node_classification_metrics(predicts: torch.Tensor, labels: torch.Tensor
     :return:
         dictionary of metrics {'metric_name_1': metric_1, ...}
     """
-    predicts = predicts.cpu().detach().numpy()
+    predicts = torch.softmax(predicts,dim=1)
+    predicts = predicts[:,1].cpu().detach().numpy()
     labels = labels.cpu().numpy()
 
-    roc_auc = roc_auc_score(y_true=labels, y_score=predicts)
+    binary_predicts = (predicts >= 0.5).astype(int)  
+    accuracy = accuracy_score(y_true=labels, y_pred=binary_predicts)
+    if len(np.unique(labels)) == 1:
+        roc_auc = 0.0
+    else :
+        roc_auc = roc_auc_score(y_true=labels, y_score=predicts)
 
-    return {'roc_auc': roc_auc}
+    return {'roc_auc': roc_auc, 'accuracy': accuracy}

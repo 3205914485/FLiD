@@ -19,7 +19,7 @@ from utils.load_configs import get_node_classification_em_args
 
 from NcEM.EM_init import em_init
 from NcEM.EM_warmup import em_warmup
-from NcEM.E_step import e_step
+from NcEM.E_step import e_step, e_step_t
 from NcEM.M_step import m_step
 from NcEM.utils import log_and_save_metrics, log_average_metrics, save_results, update_pseudo_labels
 
@@ -32,11 +32,11 @@ if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
 
-    double_way_datasets = ['bot', 'bot22', 'taobao', 'yelp']
+    double_way_datasets = ['bot','bot22','dgraph','dsub']
     # get arguments
     args = get_node_classification_em_args()
     # get data for training, validation and testing
-    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, num_node_features, val_offest, test_offest = \
+    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, num_node_features, val_offest, test_offest, train_nodes = \
         get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt)
 
@@ -59,6 +59,7 @@ if __name__ == "__main__":
         "edge_raw_features": edge_raw_features,
         "full_data": full_data,
         "train_data": train_data,
+        "train_nodes": train_nodes, # for transductive
         "val_data": val_data,
         "val_offest": val_offest,
         "test_data": test_data,
@@ -145,7 +146,7 @@ if __name__ == "__main__":
                       dst_node_embeddings=dst_node_embeddings)
         
         pseudo_labels, num_targets = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, use_pseudo_entropy=args.use_entropy,double_way_dataset=double_way_datasets)
+            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, use_pseudo_entropy=args.use_entropy, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive)
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
@@ -169,23 +170,28 @@ if __name__ == "__main__":
                                        save_model_name=save_model_name, logger=logger, model_name=model_name)
 
         IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict = {}, {}, {}, {}
-        best_test_all = 0.0
+        best_test_all = [0.0,0.0]
         for k in range(args.num_em_iters):
             logger.info(f'E-M Iter {k + 1} starts.\n')
             if args.gt_weight != 1.0:
-                gt_weight = 0.5 + (args.gt_weight - 0.5) * np.exp(-0.1 * k)
+                gt_weight = 0.1 + (args.gt_weight - 0.1) * np.exp(-0.1 * k)
             else:
                 gt_weight = 1.0
-            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
-                e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                       src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
+            if args.use_transductive:
+                Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
+                    e_step_t(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
+            else:
+                Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
+                    e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
 
             Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
                 m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_entropy=pseudo_entropy)
             
             pseudo_labels, num_targets = update_pseudo_labels(
-                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, use_pseudo_entropy=args.use_entropy,double_way_dataset=double_way_datasets)
+                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, use_pseudo_entropy=args.use_entropy, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive)
 
             logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
             
@@ -199,13 +205,13 @@ if __name__ == "__main__":
             log_and_save_metrics(
                 logger, 'Mstep', Mtest_total_loss, Mtest_metrics, Mtest_metric_dict, 'test')
 
-            if list(Mtest_metrics.values())[0] > best_test_all:
-                best_test_all = list(Mtest_metrics.values())[0]
+            if list(Mtest_metrics.values())[0] > best_test_all[0]:
+                best_test_all = list(Mtest_metrics.values())
                 if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
                     IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
                 IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
 
-            logger.info(f'Best iter metrics: {best_test_all}')
+            logger.info(f'Best iter metrics, auc: {best_test_all[0]}, acc: {best_test_all[1]},')
 
             test_metric_indicator = []
             for metric_name in Mtest_metrics.keys():

@@ -47,8 +47,7 @@ class EarlyStopping(object):
                     metrics_compare_results.append(True)
                 else:
                     metrics_compare_results.append(False)
-        # all the computed metrics are better than the best metrics
-        if torch.all(torch.tensor(metrics_compare_results)):
+        if metrics_compare_results[0]:
             for metric_tuple in metrics:
                 metric_name, metric_value = metric_tuple[0], metric_tuple[1]
                 self.best_metrics[metric_name] = metric_value

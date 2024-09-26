@@ -29,7 +29,7 @@ from utils.EarlyStopping import EarlyStopping
 
 from NcEM.trainer import Trainer
 
-double_way_dataset = ['bot', 'bot22', 'taobao', 'yelp']
+double_way_datasets = ['bot','bot22','dgraph','dsub']
 
 
 def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
@@ -54,16 +54,17 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
 
     with torch.no_grad():
         # store evaluate losses, trues and predicts
-        evaluate_total_loss, evaluate_y_trues, evaluate_y_predicts, evaluate_y_trues_gt, evaluate_y_predicts_gt, entropy_through = 0.0, [], [], [], [], 0
+        evaluate_total_loss, evaluate_y_trues, evaluate_y_predicts, evaluate_y_trues_gt, evaluate_y_predicts_gt, entropy_through, whole_ps = 0.0, [], [], [], [], 0, 0
         evaluate_idx_data_loader_tqdm = tqdm(
             evaluate_idx_data_loader, ncols=120)
         for batch_idx, evaluate_data_indices in enumerate(evaluate_idx_data_loader_tqdm):
             evaluate_data_indices = evaluate_data_indices.numpy()
-            if dataset == 'bot' or dataset == 'bot22':
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
+            if dataset in double_way_datasets :
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
                     evaluate_data.src_node_ids[evaluate_data_indices],  evaluate_data.dst_node_ids[evaluate_data_indices], \
                     evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], \
                     [pseudo_labels[0][evaluate_data_indices+offest], pseudo_labels[1][evaluate_data_indices+offest]], \
+                    [evaluate_data.labels[0][evaluate_data_indices], evaluate_data.labels[1][evaluate_data_indices]], \
                     [evaluate_data.labels_time[0][evaluate_data_indices], evaluate_data.labels_time[1][evaluate_data_indices]]
                         
             else:
@@ -119,30 +120,40 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
             else:
                 raise ValueError(f"Wrong value for model_name {model_name}!")
             # get predicted probabilities, shape (batch_size, )
-            if dataset in double_way_dataset:
+            if dataset in double_way_datasets:
                 predicts = model[1](x=torch.cat(
-                    [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0)).squeeze(dim=-1).sigmoid()
+                    [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0)).squeeze(dim=-1)
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
+                labels_gt = torch.cat([torch.from_numpy(batch_gt[0]), torch.from_numpy(batch_gt[1])], axis=0).to(
+                    torch.long).to(predicts.device).squeeze(dim=-1) 
+                
+                mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
+                mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
+
                 mask_gt_src = torch.from_numpy(
-                    batch_node_interact_times == batch_labels_times[0]).to(torch.bool)
+                    (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
                 mask_gt_dst = torch.from_numpy(
-                    batch_node_interact_times == batch_labels_times[1]).to(torch.bool)
+                    (batch_node_interact_times == batch_labels_times[1])).to(torch.bool)
                 mask_gt = torch.cat(
                     [mask_gt_src, mask_gt_dst], dim=0).squeeze(dim=-1)
+                mask_gt &= mask_nodes
+                mask_all = mask_nodes
             else:
-                predicts = model[1](x=batch_src_node_embeddings).squeeze(
-                    dim=-1).sigmoid()
+                predicts = model[1](x=batch_src_node_embeddings).squeeze(dim=-1)
                 labels = batch_labels.to(torch.long).to(
                     predicts.device).squeeze(dim=-1)
+                labels_gt = torch.from_numpy(batch_gt).to(torch.long).to(
+                    predicts.device).squeeze(dim=-1) 
                 mask_gt = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
-                
-            if use_entropy:
-                mask_all = (labels != -1).to('cpu')
-                entropy_through += sum(mask_all)
-            else:
                 mask_all = (labels == labels).to('cpu')
+
+            if use_entropy:
+                whole_ps += sum(mask_all).float()
+                mask_all &= (labels != -1).to('cpu')
+                entropy_through += sum(mask_all).float()
 
             loss = loss_func(input=predicts[mask_all], target=labels[mask_all])
 
@@ -151,7 +162,7 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
             evaluate_y_trues.append(labels[mask_all])
             evaluate_y_predicts.append(predicts[mask_all])
 
-            evaluate_y_trues_gt.append(labels[mask_gt])
+            evaluate_y_trues_gt.append(labels_gt[mask_gt])
             evaluate_y_predicts_gt.append(predicts[mask_gt])
 
             evaluate_idx_data_loader_tqdm.set_description(
@@ -166,7 +177,7 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
         evaluate_metrics_gt = get_node_classification_metrics_em(
             predicts=evaluate_y_predicts_gt, labels=evaluate_y_trues_gt)
 
-    return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt, entropy_through
+    return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt, entropy_through/whole_ps
 
 
 def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings):
@@ -210,7 +221,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
     os.makedirs(save_model_folder, exist_ok=True)
     early_stopping = EarlyStopping(patience=args.patience, save_model_folder=save_model_folder,
                                    save_model_name=save_model_name, logger=logger, model_name=model_name)
-    best_acc, best_acc_gt = 0.0, 0.0
+    best_metrics, best_metrics_gt = {'roc_auc': 0.0, 'accuracy': 0.0}, {'roc_auc': 0.0, 'accuracy': 0.0}
     for epoch in range(args.num_epochs_e_step):
         model.train()
         if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
@@ -226,14 +237,15 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
         # store train losses, trues and predicts
         train_total_loss, train_y_trues, train_y_predicts = 0.0, [], []
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
-        train_entropy_through = 0
+        train_entropy_through, whole_ps = 0 , 0
         for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
             train_data_indices = train_data_indices.numpy()
 
-            if args.dataset_name in double_way_dataset:
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
+            if args.dataset_name in double_way_datasets:
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
                     train_data.edge_ids[train_data_indices], [pseudo_labels[0][train_data_indices], pseudo_labels[1][train_data_indices]], \
+                    [train_data.labels[0][train_data_indices], train_data.labels[1][train_data_indices]], \
                     [train_data.labels_time[0][train_data_indices], train_data.labels_time[1][train_data_indices]]
             else:
                 batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
@@ -286,17 +298,22 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
             else:
                 raise ValueError(f"Wrong value for model_name {model_name}!")
         # get predicted probabilities, shape (batch_size, )
-            if args.dataset_name in double_way_dataset:
+            if args.dataset_name in double_way_datasets:
                 predicts = model[1](x=torch.cat(
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
+                mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
+                mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
                 mask_gt_src = torch.from_numpy(
-                    batch_node_interact_times == batch_labels_times[0]).to(torch.bool)
+                    (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
                 mask_gt_dst = torch.from_numpy(
-                    batch_node_interact_times == batch_labels_times[1]).to(torch.bool)
+                    (batch_node_interact_times == batch_labels_times[1])).to(torch.bool)
                 mask_gt = torch.cat(
                     [mask_gt_src, mask_gt_dst], dim=0).squeeze(dim=-1)
+                mask_gt &= mask_nodes
+                mask_ps = mask_nodes & (~mask_gt)
 
             else:
                 predicts = model[1](x=batch_src_node_embeddings)
@@ -304,12 +321,371 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                     predicts.device).squeeze(dim=-1)
                 mask_gt = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
+                mask_ps = ~mask_gt
+
+            if args.use_entropy:
+                whole_ps += sum(mask_ps).float()
+                mask_ps &= (labels != -1).to('cpu')
+                train_entropy_through += sum(mask_ps).float()
+
+            predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
+            predicts_ps, labels_ps = predicts[mask_ps], labels[mask_ps]
+            loss_gt = loss_func(input=predicts_gt, target=labels_gt)
+            loss_gt = torch.tensor(0.0) if torch.isnan(loss_gt) else loss_gt
+            loss_ps = loss_func(input=predicts_ps, target=labels_ps)
+            loss_ps = torch.tensor(0.0) if torch.isnan(loss_ps) else loss_ps
+            loss = gt_weight*loss_gt + (1-gt_weight)*loss_ps
+            train_total_loss += loss.item()
+            train_y_trues.append(labels[mask_ps | mask_gt])
+            train_y_predicts.append(predicts[mask_ps | mask_gt])
+
+            optimizer.zero_grad()
+            loss.backward()
+
+            optimizer.step()
+
+            train_idx_data_loader_tqdm.set_description(
+                f'Epoch: {epoch + 1}, train for the {batch_idx + 1}-th batch, train loss: {loss.item()}')
+
+            if model_name in ['JODIE', 'DyRep', 'TGN']:
+                # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
+                model[0].memory_bank.detach_memory_bank()
+        if train_entropy_through != 0 and epoch == 0 :
+            logger.info(f'Train Entropy through: {train_entropy_through/whole_ps:.4f}')
+        train_total_loss /= (batch_idx + 1)
+        train_y_trues = torch.cat(train_y_trues, dim=0)
+        train_y_predicts = torch.cat(train_y_predicts, dim=0)
+
+        train_metrics = get_node_classification_metrics_em(
+            predicts=train_y_predicts, labels=train_y_trues)
+        logger.info(
+            f'Epoch: {epoch + 1}, learning rate: {optimizer.param_groups[0]["lr"]}, train loss: {train_total_loss:.4f}')
+        for metric_name in train_metrics.keys():
+            logger.info(
+                f'train {metric_name}, {train_metrics[metric_name]:.4f}')
+            
+        val_total_loss, val_metrics, val_metrics_gt, val_entropy_through = evaluate_model_node_classification_E_step(model_name=model_name,
+                                                                                                model=model,
+                                                                                                dataset=args.dataset_name,
+                                                                                                neighbor_sampler=full_neighbor_sampler,
+                                                                                                evaluate_idx_data_loader=val_idx_data_loader,
+                                                                                                evaluate_data=val_data,
+                                                                                                pseudo_labels=pseudo_labels,
+                                                                                                offest=val_offest,
+                                                                                                use_entropy=args.use_entropy,
+                                                                                                loss_func=loss_func,
+                                                                                                num_neighbors=args.num_neighbors,
+                                                                                                time_gap=args.time_gap)
+
+        if val_entropy_through != 0 and epoch == 0 :
+            logger.info(f'Valid Entropy through: {val_entropy_through:.4f}')    
+        logger.info(f'validate loss: {val_total_loss:.4f}')
+        for metric_name in val_metrics.keys():
+            logger.info(
+                f'validate {metric_name}, {val_metrics[metric_name]:.4f}')
+        for metric_name in val_metrics_gt.keys():
+            logger.info(
+                f'Ground Truth validate {metric_name}, {val_metrics_gt[metric_name]:.4f}')
+        # perform testing once after test_interval_epochs
+        if (epoch + 1) % args.test_interval_epochs == 0:
+            if model_name in ['JODIE', 'DyRep', 'TGN']:
+                # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
+                val_backup_memory_bank = model[0].memory_bank.backup_memory_bank(
+                )
+
+            test_total_loss, test_metrics, test_metrics_gt, test_entropy_through = evaluate_model_node_classification_E_step(model_name=model_name,
+                                                                                                       model=model,
+                                                                                                       dataset=args.dataset_name,
+                                                                                                       neighbor_sampler=full_neighbor_sampler,
+                                                                                                       evaluate_idx_data_loader=test_idx_data_loader,
+                                                                                                       evaluate_data=test_data,
+                                                                                                       offest=test_offest,
+                                                                                                       use_entropy=args.use_entropy,
+                                                                                                       pseudo_labels=pseudo_labels,
+                                                                                                       loss_func=loss_func,
+                                                                                                       num_neighbors=args.num_neighbors,
+                                                                                                       time_gap=args.time_gap)
+
+            if model_name in ['JODIE', 'DyRep', 'TGN']:
+                # reload validation memory bank for saving models
+                # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
+                model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
+            if test_entropy_through != 0 and epoch == 0 :
+                logger.info(f'Test Entropy through: {test_entropy_through:.4f}')    
+            logger.info(f'test loss: {test_total_loss:.4f}')
+            for metric_name in test_metrics.keys():
+                logger.info(
+                    f'test {metric_name}, {test_metrics[metric_name]:.4f}')
+            for metric_name in test_metrics_gt.keys():
+                logger.info(
+                    f'Groun Truth test {metric_name}, {test_metrics_gt[metric_name]:.4f}')
+        # select the best model based on all the validate metrics
+        test_metric_indicator = []
+        for metric_name in test_metrics.keys():
+            test_metric_indicator.append(
+                (metric_name, test_metrics[metric_name], True))
+        early_stop = early_stopping.step(test_metric_indicator, model)
+
+        if test_metrics['roc_auc'] > best_metrics['roc_auc']:
+            best_metrics = test_metrics
+        for metric_name in best_metrics.keys():
+            logger.info(
+                f'Best test {metric_name}, {best_metrics[metric_name]:.4f}')
+        if test_metrics_gt['roc_auc'] > best_metrics_gt['roc_auc']:
+            best_metrics_gt = test_metrics_gt
+        for metric_name in best_metrics_gt.keys():
+            logger.info(
+                f'Best test Ground Truth {metric_name}, {best_metrics_gt[metric_name]:.4f}')
+
+        if early_stop[0]:
+            break
+    # load the best model
+    early_stopping.load_checkpoint(model)
+
+    # evaluate the best model
+    logger.info(f'get best performance on dataset {args.dataset_name}...')
+
+    # the saved best model of memory-based models cannot perform validation since the stored memory has been updated by validation data
+    if model_name not in ['JODIE', 'DyRep', 'TGN']:
+        val_total_loss, val_metric, val_metrics_gt, val_entropy_through = evaluate_model_node_classification_E_step(model_name=model_name,
+                                                                                               model=model,
+                                                                                               dataset=args.dataset_name,
+                                                                                               neighbor_sampler=full_neighbor_sampler,
+                                                                                               evaluate_idx_data_loader=val_idx_data_loader,
+                                                                                               evaluate_data=val_data,
+                                                                                               offest=val_offest,
+                                                                                               use_entropy=args.use_entropy,
+                                                                                               pseudo_labels=pseudo_labels,
+                                                                                               loss_func=loss_func,
+                                                                                               num_neighbors=args.num_neighbors,
+                                                                                               time_gap=args.time_gap)
+
+    test_total_loss, test_metrics, test_metrics_gt, test_entropy_through = evaluate_model_node_classification_E_step(model_name=model_name,
+                                                                                               model=model,
+                                                                                               dataset=args.dataset_name,
+                                                                                               neighbor_sampler=full_neighbor_sampler,
+                                                                                               evaluate_idx_data_loader=test_idx_data_loader,
+                                                                                               evaluate_data=test_data,
+                                                                                               offest=test_offest,
+                                                                                               use_entropy=args.use_entropy,
+                                                                                               pseudo_labels=pseudo_labels,
+                                                                                               loss_func=loss_func,
+                                                                                               num_neighbors=args.num_neighbors,
+                                                                                               time_gap=args.time_gap)
+    for metric_name in test_metrics_gt.keys():
+        logger.info(f'test {metric_name}, {test_metrics_gt[metric_name]:.4f}')
+    # generating the embeddings
+        # Loop through events and generate embeddings
+    src_node_embeddings_list, dst_node_embeddings_list = [], []
+    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
+        model[0].set_neighbor_sampler(full_neighbor_sampler)
+    if model_name in ['JODIE', 'DyRep', 'TGN']:
+        model[0].memory_bank.__init_memory_bank__()
+
+    idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
+    for batch_idx, data_indices in enumerate(idx_data_loader_tqdm):
+        data_indices = data_indices.numpy()
+        batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids = \
+            full_data.src_node_ids[data_indices], full_data.dst_node_ids[data_indices], full_data.node_interact_times[data_indices], \
+            full_data.edge_ids[data_indices]
+
+        with torch.no_grad():
+            if model_name in ['TGAT', 'CAWN', 'TCL']:
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      num_neighbors=args.num_neighbors)
+            elif model_name in ['JODIE', 'DyRep', 'TGN']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      edge_ids=batch_edge_ids,
+                                                                      edges_are_positive=True,
+                                                                      num_neighbors=args.num_neighbors)
+            elif model_name in ['GraphMixer']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      num_neighbors=args.num_neighbors,
+                                                                      time_gap=args.time_gap)
+            elif model_name in ['DyGFormer']:
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times)
+            else:
+                raise ValueError(f"Wrong value for model_name {model_name}!")
+        src_node_embeddings_list.append(batch_src_node_embeddings)
+        dst_node_embeddings_list.append(batch_dst_node_embeddings)
+
+    # Concatenate all embeddings
+    new_src_embeddings = torch.cat(src_node_embeddings_list, dim=0)
+    new_dst_embeddings = torch.cat(dst_node_embeddings_list, dim=0)
+    src_node_embeddings.copy_(new_src_embeddings)
+    dst_node_embeddings.copy_(new_dst_embeddings)
+    return val_total_loss, val_metrics, test_total_loss, test_metrics
+
+def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings):
+
+    logger.info(f"Starting E-step\n")
+    full_data = data['full_data']
+    # train_data = data["train_data"]
+    # transductive
+    train_data = data['full_data']
+    train_nodes = data['train_nodes']
+    val_data = data["val_data"]
+    val_offest = data['val_offest']
+    test_data = data["test_data"]
+    test_offest = data['test_offest']
+    full_neighbor_sampler = data["full_neighbor_sampler"]
+    full_idx_data_loader = data["full_idx_data_loader"]
+    # train_idx_data_loader = data["train_idx_data_loader"]
+    # transductive
+    train_idx_data_loader = data["full_idx_data_loader"]
+    val_idx_data_loader = data["val_idx_data_loader"]
+    test_idx_data_loader = data["test_idx_data_loader"]
+
+    dynamic_backbone = Etrainer.model
+    if args.decoder == 1:
+        node_classifier = Mtrainer.model[1]
+        model = nn.Sequential(dynamic_backbone, node_classifier)
+        if args.use_unified:
+            optimizer = create_optimizer(model=model, optimizer_name=args.optimizer,
+                                         learning_rate=args.learning_rate, weight_decay=args.weight_decay)
+        else:
+            optimizer = Etrainer.optimizer
+    else:
+        node_classifier = Mtrainer.model[0]
+        model = nn.Sequential(dynamic_backbone, node_classifier)
+        optimizer = create_optimizer(model=model, optimizer_name=args.optimizer,
+                                     learning_rate=args.learning_rate, weight_decay=args.weight_decay)
+
+    model_name = Etrainer.model_name
+    loss_func = Etrainer.criterion
+    save_model_name = f'ncem_{model_name}'
+    if args.use_unified:
+        save_model_folder = f"./saved_models/ncem/E_unified/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    else:
+        save_model_folder = f"./saved_models/ncem/E/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    shutil.rmtree(save_model_folder, ignore_errors=True)
+    os.makedirs(save_model_folder, exist_ok=True)
+    early_stopping = EarlyStopping(patience=args.patience, save_model_folder=save_model_folder,
+                                   save_model_name=save_model_name, logger=logger, model_name=model_name)
+    best_metrics, best_metrics_gt = {'roc_auc': 0.0, 'accuracy': 0.0}, {'roc_auc': 0.0, 'accuracy': 0.0}
+    for epoch in range(args.num_epochs_e_step):
+        model.train()
+        if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
+            # training process, set the neighbor sampler
+            model[0].set_neighbor_sampler(full_neighbor_sampler)
+        if model_name in ["M"]:
+            model[0].set_neighbor_sampler(full_neighbor_sampler)
+            # model[0].message_function.resetparameters()
+        if model_name in ['JODIE', 'DyRep', 'TGN']:
+            # reinitialize memory of memory-based models at the start of each epoch
+            model[0].memory_bank.__init_memory_bank__()
+
+        # store train losses, trues and predicts
+        train_total_loss, train_y_trues, train_y_predicts = 0.0, [], []
+        train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
+        train_entropy_through = 0
+        for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
+            train_data_indices = train_data_indices.numpy()
+
+            if args.dataset_name in double_way_datasets:
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
+                    train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
+                    train_data.edge_ids[train_data_indices], [pseudo_labels[0][train_data_indices], pseudo_labels[1][train_data_indices]], \
+                    [train_data.labels[0][train_data_indices], train_data.labels[1][train_data_indices]], \
+                    [train_data.labels_time[0][train_data_indices], train_data.labels_time[1][train_data_indices]]
+            else:
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
+                    train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
+                    train_data.edge_ids[train_data_indices], pseudo_labels[train_data_indices], train_data.labels_time[train_data_indices]
+
+            if model_name in ['TGAT', 'CAWN', 'TCL']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      num_neighbors=args.num_neighbors)
+            elif model_name in ['JODIE', 'DyRep', 'TGN']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      edge_ids=batch_edge_ids,
+                                                                      edges_are_positive=True,
+                                                                      num_neighbors=args.num_neighbors)
+            elif model_name in ['GraphMixer']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      num_neighbors=args.num_neighbors,
+                                                                      time_gap=args.time_gap)
+            elif model_name in ['M']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      num_neighbors=args.num_neighbors,
+                                                                      time_gap=args.time_gap)
+            elif model_name in ['DyGFormer']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times)
+            else:
+                raise ValueError(f"Wrong value for model_name {model_name}!")
+        # get predicted probabilities, shape (batch_size, )
+            if args.dataset_name in double_way_datasets:
+                predicts = model[1](x=torch.cat(
+                    [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
+                labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
+                    torch.long).to(predicts.device).squeeze(dim=-1)
+                mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
+                mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
+                # transductive
+                mask_gt_src = torch.from_numpy(
+                    ((batch_node_interact_times == batch_labels_times[0]) & np.isin(batch_src_node_ids,train_nodes))).to(torch.bool)
+                mask_gt_dst = torch.from_numpy(
+                    ((batch_node_interact_times == batch_labels_times[1]) & np.isin(batch_dst_node_ids,train_nodes))).to(torch.bool)
+                mask_gt = torch.cat(
+                    [mask_gt_src, mask_gt_dst], dim=0).squeeze(dim=-1)
+            else:
+                predicts = model[1](x=batch_src_node_embeddings)
+                labels = batch_labels.to(torch.long).to(
+                    predicts.device).squeeze(dim=-1)
+                # transductive
+                mask_gt = torch.from_numpy(
+                    (batch_node_interact_times == batch_labels_times)  & np.isin(batch_src_node_ids,train_nodes)).to(torch.bool)
             if args.use_entropy:
                 mask_ps = (labels != -1).to('cpu')
                 train_entropy_through += sum(mask_ps)
                 mask_ps &= ~mask_gt
             else:
                 mask_ps = ~mask_gt
+            if args.dataset_name in double_way_datasets:
+                mask_ps &= mask_nodes
+                mask_gt &= mask_nodes
             predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
             predicts_ps, labels_ps = predicts[mask_ps], labels[mask_ps]
             loss_gt = loss_func(input=predicts_gt, target=labels_gt)
@@ -408,12 +784,16 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                 (metric_name, test_metrics[metric_name], True))
         early_stop = early_stopping.step(test_metric_indicator, model)
 
-        if test_metrics['roc_auc'] > best_acc:
-            best_acc = test_metrics['roc_auc']
-        logger.info(f'Best test {metric_name}: {best_acc:.4f}')
-        if test_metrics_gt['roc_auc'] > best_acc_gt:
-            best_acc_gt = test_metrics_gt['roc_auc']
-        logger.info(f'Best Ground Truth test {metric_name}: {best_acc_gt:.4f}')
+        if test_metrics['roc_auc'] > best_metrics['roc_auc']:
+            best_metrics = test_metrics
+        for metric_name in best_metrics.keys():
+            logger.info(
+                f'Best test {metric_name}, {best_metrics[metric_name]:.4f}')
+        if test_metrics_gt['roc_auc'] > best_metrics_gt['roc_auc']:
+            best_metrics_gt = test_metrics_gt
+        for metric_name in best_metrics_gt.keys():
+            logger.info(
+                f'Best test Ground Truth {metric_name}, {best_metrics_gt[metric_name]:.4f}')
 
         if early_stop[0]:
             break
