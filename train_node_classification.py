@@ -242,8 +242,12 @@ if __name__ == "__main__":
                 if args.dataset_name in double_way_datasets :
                     mask_train_src = np.isin(batch_src_node_ids, train_nodes)
                     mask_train_dst = np.isin(batch_dst_node_ids, train_nodes) 
-                    mask_src = np.isin(batch_labels[0],[0,1]) & mask_train_src
-                    mask_dst = np.isin(batch_labels[1],[0,1]) & mask_train_dst
+                    if args.dataset_name == 'dsub':
+                        mask_src = np.isin(batch_labels[0],[0,1]) & mask_train_src
+                        mask_dst = np.isin(batch_labels[1],[0,1]) & mask_train_dst
+                    else :
+                        mask_src = mask_train_src
+                        mask_dst = mask_train_dst                        
                     predicts = model[1](x=torch.cat(
                         [batch_src_node_embeddings[mask_src], batch_dst_node_embeddings[mask_dst]], dim=0)).squeeze(dim=-1)
                     labels = torch.from_numpy(np.concatenate(
