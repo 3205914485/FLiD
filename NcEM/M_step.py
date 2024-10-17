@@ -34,7 +34,7 @@ from models.modules import MergeLayer
 from NcEM.trainer import Trainer
 from NcEM.trainer import Trainer
 
-double_way_datasets = ['bot','bot22','dgraph','dsub']
+double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
 
 
 def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset: str, src_node_embeddings: torch.tensor,
@@ -69,10 +69,16 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.from_numpy(np.concatenate(
                     [batch_labels[0], batch_labels[1]], axis=0)).long().to(predicts.device)
-                mask_gt_src = torch.from_numpy(
-                    (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
-                mask_gt_dst = torch.from_numpy(
-                    (batch_node_interact_times == batch_labels_times[1]) & (np.isin(batch_labels[1],[0,1]))).to(torch.bool)
+                if dataset == 'dsub':
+                    mask_gt_src = torch.from_numpy(
+                        (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
+                    mask_gt_dst = torch.from_numpy(
+                        (batch_node_interact_times == batch_labels_times[1]) & (np.isin(batch_labels[1],[0,1]))).to(torch.bool)
+                else :
+                    mask_gt_src = torch.from_numpy(
+                        (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
+                    mask_gt_dst = torch.from_numpy(
+                        (batch_node_interact_times == batch_labels_times[1])).to(torch.bool)
                 mask = torch.cat([mask_gt_src, mask_gt_dst],dim=0).squeeze(dim=-1)
                 probabilities = torch.softmax(predicts, dim=1)
                 pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
@@ -163,10 +169,16 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                         [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                     labels = torch.from_numpy(np.concatenate(
                         [batch_labels[0], batch_labels[1]], axis=0)).to(torch.long).to(predicts.device)
-                    mask_gt_src = torch.from_numpy(
-                        (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
-                    mask_gt_dst = torch.from_numpy(
-                        (batch_node_interact_times == batch_labels_times[1]) & (np.isin(batch_labels[1],[0,1]))).to(torch.bool)
+                    if args.dataset_name == 'dsub':
+                        mask_gt_src = torch.from_numpy(
+                            (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
+                        mask_gt_dst = torch.from_numpy(
+                            (batch_node_interact_times == batch_labels_times[1]) & (np.isin(batch_labels[1],[0,1]))).to(torch.bool)
+                    else :
+                        mask_gt_src = torch.from_numpy(
+                            (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
+                        mask_gt_dst = torch.from_numpy(
+                            (batch_node_interact_times == batch_labels_times[1])).to(torch.bool)
                     mask = torch.cat(
                         [mask_gt_src, mask_gt_dst], dim=0).squeeze(dim=-1)
                     probabilities = torch.softmax(predicts, dim=1)
@@ -265,8 +277,7 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                 break
 
     # load the best model
-    early_stopping.load_checkpoint(model)
-    model.to(args.device)
+    early_stopping.load_checkpoint(model,map_location=args.device)
     # evaluate the best model
     logger.info(f'get best performance on dataset {args.dataset_name}...')
     val_total_loss, val_metrics = evaluate_model_node_classification_withembeddings(model=model,

@@ -29,7 +29,7 @@ cpu_num = 2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa 
 os.environ["MKL_NUM_THREADS"] = str(cpu_num)  # noqa
 torch.set_num_threads(cpu_num)
-double_way_datasets = ['bot','bot22','dgraph','dsub']
+double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
 if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
@@ -38,10 +38,10 @@ if __name__ == "__main__":
     args = get_node_classification_args()
 
     # get data for training, validation and testing
-    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes = \
+    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes, num_classes = \
         get_node_classification_data(
             dataset_name=args.dataset_name, val_ratio=args.val_ratio, test_ratio=args.test_ratio, new_spilt=args.new_spilt)
-
+    args.num_classes = num_classes
     # initialize validation and test neighbor sampler to retrieve temporal graph
     full_neighbor_sampler = get_neighbor_sampler(data=full_data, sample_neighbor_strategy=args.sample_neighbor_strategy,
                                                  time_scaling_factor=args.time_scaling_factor, seed=1)

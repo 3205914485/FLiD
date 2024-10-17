@@ -96,6 +96,12 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))     
         print(node_raw_features.shape)
+    elif dataset_name=='yelp' :
+        NODE_FEAT_DIM = 300
+        EDGE_FEAT_DIM = 64
+        graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
+        edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
+        node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))   
     else:
         NODE_FEAT_DIM = EDGE_FEAT_DIM = 172
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
@@ -120,7 +126,7 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
     dst_node_ids = graph_df.i.values.astype(np.longlong)
     node_interact_times = graph_df.ts.values.astype(np.float64)
     edge_ids = graph_df.idx.values.astype(np.longlong)
-    if dataset_name=='bot' or dataset_name== 'bot22' or dataset_name=='dsub' or dataset_name=='dgraph':
+    if dataset_name=='bot' or dataset_name== 'bot22' or dataset_name=='dsub' or dataset_name=='dgraph' or dataset_name =='yelp':
         labels = graph_df.label_u.values
     else :
         labels = graph_df.label.values
@@ -241,6 +247,12 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))
+    elif dataset_name=='yelp' :
+        NODE_FEAT_DIM = 300
+        EDGE_FEAT_DIM = 64
+        graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
+        edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
+        node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))   
     else:
         NODE_FEAT_DIM = EDGE_FEAT_DIM = 172
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
@@ -274,7 +286,12 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         labels_time = graph_df.last_timestamp.values
     # The setting of seed follows previous works
     random.seed(2020)
+    if isinstance(labels, list):
+        all_labels = np.concatenate(labels)
+    else:
+        all_labels = labels
 
+    num_classes = len(np.unique(all_labels))
     if new_spilt:
         # spilt based on the gt
         if dataset_name in double_way_datasets:
@@ -352,7 +369,7 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
                         node_interact_times=node_interact_times[test_mask], edge_ids=edge_ids[test_mask],labels=labels[test_mask], 
                         labels_time = labels_time[test_mask])
         
-    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes
+    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes, num_classes
 
 
 def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pretrained: bool=True, new_spilt: bool=False):
@@ -365,24 +382,29 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
             full_data, train_data, val_data, test_data, num_interactions, num_node_features (Data object)
     """
     # Load data and train val test split
-    if dataset_name=='bot22' and not is_pretrained:
+    if dataset_name == 'bot22' and not is_pretrained:
         NODE_FEAT_DIM = EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name)) 
-    elif dataset_name=='bot22' and  is_pretrained:
+    elif dataset_name == 'bot22' and  is_pretrained:
         NODE_FEAT_DIM = 778
         EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node_pretrained.npy'.format(dataset_name, dataset_name)) 
-    elif dataset_name=='bot' :
+    elif dataset_name == 'bot' :
         NODE_FEAT_DIM = 778
         EDGE_FEAT_DIM = 778
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
         edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
         node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))     
-
+    elif dataset_name == 'yelp' :
+        NODE_FEAT_DIM = 300
+        EDGE_FEAT_DIM = 64
+        graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
+        edge_raw_features = np.load('./processed_data/{}/ml_{}.npy'.format(dataset_name, dataset_name))
+        node_raw_features = np.load('./processed_data/{}/ml_{}_node.npy'.format(dataset_name, dataset_name))   
     else:
         NODE_FEAT_DIM = EDGE_FEAT_DIM = 172
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))
@@ -405,7 +427,7 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
     node_interact_times = graph_df.ts.values.astype(np.float64)
     edge_ids = graph_df.idx.values.astype(np.longlong)
 
-    double_way_datasets = ['bot','bot22','dgraph','dsub']
+    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
 
     if dataset_name in double_way_datasets :
         label1 = graph_df.label_u.values
@@ -419,6 +441,12 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
         labels_time = graph_df.last_timestamp.values
     # The setting of seed follows previous works
     random.seed(2020)
+    if isinstance(labels, list):
+        all_labels = np.concatenate(labels)
+    else:
+        all_labels = labels
+
+    num_classes = len(np.unique(all_labels))
 
     if new_spilt:
         # spilt based on the gt
@@ -499,12 +527,12 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
                         node_interact_times=node_interact_times[test_mask], edge_ids=edge_ids[test_mask],labels=labels[test_mask], 
                         labels_time = labels_time[test_mask])
         
-    print("The dataset has {} interactions, involving {} different nodes".format(full_data.num_interactions, full_data.num_unique_nodes))
-    print("The training dataset has {} interactions, involving {} different nodes".format(
-        train_data.num_interactions, train_data.num_unique_nodes))
-    print("The validation dataset has {} interactions, involving {} different nodes".format(
-        val_data.num_interactions, val_data.num_unique_nodes))
-    print("The test dataset has {} interactions, involving {} different nodes".format(
-        test_data.num_interactions, test_data.num_unique_nodes)) 
+    # print("The dataset has {} interactions, involving {} different nodes".format(full_data.num_interactions, full_data.num_unique_nodes))
+    # print("The training dataset has {} interactions, involving {} different nodes".format(
+    #     train_data.num_interactions, train_data.num_unique_nodes))
+    # print("The validation dataset has {} interactions, involving {} different nodes".format(
+    #     val_data.num_interactions, val_data.num_unique_nodes))
+    # print("The test dataset has {} interactions, involving {} different nodes".format(
+    #     test_data.num_interactions, test_data.num_unique_nodes)) 
     
-    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, full_data.num_interactions, NODE_FEAT_DIM, val_offest, test_offest, train_nodes 
+    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, full_data.num_interactions, NODE_FEAT_DIM, val_offest, test_offest, train_nodes, num_classes

@@ -29,7 +29,7 @@ from utils.EarlyStopping import EarlyStopping
 
 from NcEM.trainer import Trainer
 
-double_way_datasets = ['bot','bot22','dgraph','dsub']
+double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
 
 
 def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
@@ -127,9 +127,13 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
                     torch.long).to(predicts.device).squeeze(dim=-1)
                 labels_gt = torch.cat([torch.from_numpy(batch_gt[0]), torch.from_numpy(batch_gt[1])], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1) 
-                
-                mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
-                mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                if dataset == 'dsub': 
+                    mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
+                    mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                else:
+                    mask_nodes_src = torch.ones_like(torch.from_numpy(batch_gt[0]), dtype=torch.bool)
+                    mask_nodes_dst = torch.ones_like(torch.from_numpy(batch_gt[1]), dtype=torch.bool)
+  
                 mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
 
                 mask_gt_src = torch.from_numpy(
@@ -154,6 +158,9 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
                 whole_ps += sum(mask_all).float()
                 mask_all &= (labels != -1).to('cpu')
                 entropy_through += sum(mask_all).float()
+            else :
+                whole_ps = 1
+                entropy_through = 0
 
             loss = loss_func(input=predicts[mask_all], target=labels[mask_all])
 
@@ -303,8 +310,13 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
-                mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
-                mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                if args.dataset_name == 'dsub': 
+                    mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
+                    mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                else:
+                    mask_nodes_src = torch.ones_like(torch.from_numpy(batch_gt[0]), dtype=torch.bool)
+                    mask_nodes_dst = torch.ones_like(torch.from_numpy(batch_gt[1]), dtype=torch.bool)
+  
                 mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
                 mask_gt_src = torch.from_numpy(
                     (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
@@ -660,8 +672,13 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
-                mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
-                mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                if args.dataset_name == 'dsub': 
+                    mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
+                    mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                else:
+                    mask_nodes_src = torch.ones_like(torch.from_numpy(batch_gt[0]), dtype=torch.bool)
+                    mask_nodes_dst = torch.ones_like(torch.from_numpy(batch_gt[1]), dtype=torch.bool)
+  
                 mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
                 # transductive
                 mask_gt_src = torch.from_numpy(

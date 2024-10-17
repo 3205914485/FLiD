@@ -295,8 +295,7 @@ def link_prediction(args, Etrainer, data, logger):
                     break
 
     # load the best model
-    early_stopping.load_checkpoint(model)
-    model.to(args.device)
+    early_stopping.load_checkpoint(model,map_location=args.device)
     # generating the embeddings
     # Loop through events and generate embeddings
     # Etrainer.model = model[0]

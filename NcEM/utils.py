@@ -51,9 +51,9 @@ def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pse
     num_targets = len(pseudo_entropy_list)
 
     if use_pseudo_entropy:
-        pseudo_entropy_list = [2 * pseudo_confidence - 1 for pseudo_confidence in pseudo_entropy_list]
+        pseudo_entropy_list = [pseudo_confidence - 0.5 for pseudo_confidence in pseudo_entropy_list]
         pseudo_entropy_score = torch.abs(torch.sum(torch.stack(pseudo_entropy_list),dim=0))
-        mask_entropy = pseudo_entropy_score > threshold * num_targets
+        mask_entropy = pseudo_entropy_score > (threshold - 0.5) * num_targets
         pseudo_labels[~mask_entropy] = -1
     else :
         pass
