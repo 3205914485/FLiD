@@ -10,3 +10,4 @@ __pycache__
 env/
 *.sh
 data
+results
