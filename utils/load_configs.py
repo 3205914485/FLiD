@@ -24,10 +24,10 @@ def get_link_prediction_args(is_evaluation: bool = False):
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument('--prefix',type=str,help='prefix of work')
 
-    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='zhk2',
+    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='yelp',
                         choices=['bot22','wikipedia', 'reddit', 'mooc', 'lastfm','zhk','zhk2', 'yelp', 'bot','enron', 'SocialEvo', 'uci', 'Flights', 'CanParl', 'USLegis', 'UNtrade', 'UNvote', 'Contacts','dsub','dgraph'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
-    parser.add_argument('--model_name', type=str, default='DyGFormer', help='name of the model, note that EdgeBank is only applicable for evaluation',
+    parser.add_argument('--model_name', type=str, default='TGAT', help='name of the model, note that EdgeBank is only applicable for evaluation',
                         choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', "M", 'EdgeBank', 'TCL', 'GraphMixer', 'DyGFormer'])
     parser.add_argument('--accelerate',default=False,help='wheather use the acceletate')
     parser.add_argument('--gpu', type=int, default=3, help='number of gpu to use')
@@ -268,11 +268,11 @@ def get_node_classification_args():
     parser = argparse.ArgumentParser('Interface for the node classification task')
     parser.add_argument('--mode',type=str,default='dt')
     parser.add_argument('--prefix',type=str,help='prefix of work')
-    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='bot', choices=['wikipedia','bot', 'bot22','reddit','rt_wiki','dsub','dgraph','yelp'])
+    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='yelp', choices=['wikipedia','bot', 'bot22','reddit','rt_wiki','dsub','dgraph','yelp'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--model_name', type=str, default='TGAT', help='name of the model',
                         choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer','M'])
-    parser.add_argument('--gpu', type=int, default=2, help='number of gpu to use')
+    parser.add_argument('--gpu', type=int, default=3, help='number of gpu to use')
     parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')
     parser.add_argument('--sample_neighbor_strategy', type=str, default='recent', choices=['uniform', 'recent', 'time_interval_aware'], help='how to sample historical neighbors')
     parser.add_argument('--time_scaling_factor', default=1e-6, type=float, help='the hyperparameter that controls the sampling preference with time interval, '
@@ -388,7 +388,7 @@ def get_node_classification_em_args():
 
     # Configuration of the experiment
     parser.add_argument('--prefix',type=str, default='test', help='prefix of work')
-    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='yelp', choices=['wikipedia','bot', 'bot22','reddit','rt_wiki','taobao','yelp','dsub','dgraph'])
+    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='bot', choices=['wikipedia','bot', 'bot22','reddit','rt_wiki','taobao','yelp','dsub','dgraph'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--emodel_name', type=str, default='TGAT', help='name of the model of dyg backbone',
                         choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer','M'])

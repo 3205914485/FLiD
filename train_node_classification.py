@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
         # create the model for the node classification task
         node_classifier = MLPClassifier(
-            input_dim=node_raw_features.shape[1], dropout=args.dropout)
+            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
         model = nn.Sequential(model[0], node_classifier)
         logger.info(f'model -> {model}')
         logger.info(f'model name: {args.model_name}, #parameters: {get_parameter_sizes(model) * 4} B, '

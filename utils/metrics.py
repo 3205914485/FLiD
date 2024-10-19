@@ -40,10 +40,10 @@ def get_node_classification_metrics_em(predicts: torch.Tensor, labels: torch.Ten
     
     # Calculate ROC AUC score for each class, then average
     if len(np.unique(labels_np)) > 1:
-        try:
+        if predicts_np.shape[1] == 2:
+            roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np[:, 1])
+        else:
             roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np, multi_class='ovr')
-        except ValueError:
-            roc_auc = 0.0
     else:
         roc_auc = 0.0
 
@@ -69,10 +69,10 @@ def get_node_classification_metrics(predicts: torch.Tensor, labels: torch.Tensor
     
     # Calculate ROC AUC score for each class, then average
     if len(np.unique(labels_np)) > 1:
-        try:
+        if predicts_np.shape[1] == 2:
+            roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np[:, 1])
+        else:
             roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np, multi_class='ovr')
-        except ValueError:
-            roc_auc = 0.0
     else:
         roc_auc = 0.0
 

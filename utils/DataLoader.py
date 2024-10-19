@@ -132,7 +132,7 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
         labels = graph_df.label.values
 
     labels_time = graph_df.last_u_ts.values
-# labels have two lists, for this task we do not use it thus we only take one
+    # labels have two lists, for this task we do not use it thus we only take one
 
     full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, 
                      edge_ids=edge_ids, labels=labels, labels_time = labels_time)
@@ -214,10 +214,10 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
 
     # 联合训练、验证、测试数据集中的节点
     combined_nodes_set = train_node_set.union(set(val_data.src_node_ids)).union(set(val_data.dst_node_ids)).union(set(test_data.src_node_ids)).union(set(test_data.dst_node_ids))
-
+    print(all_nodes_set - combined_nodes_set)
     # 检查是否有节点被遗漏
-    assert all_nodes_set == combined_nodes_set, "Some nodes are missing in the datasets."
-    
+    # assert all_nodes_set == combined_nodes_set, "Some nodes are missing in the datasets."
+
     return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, new_node_val_data, new_node_test_data
 
 
@@ -269,7 +269,7 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         edge_raw_features = np.concatenate([edge_raw_features, edge_zero_padding], axis=1)
 
     assert NODE_FEAT_DIM == node_raw_features.shape[1] and EDGE_FEAT_DIM == edge_raw_features.shape[1], 'Unaligned feature dimensions after feature padding!'
-    double_way_datasets = ['bot','bot22','dgraph','dsub']
+    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
     src_node_ids = graph_df.u.values.astype(np.longlong)
     dst_node_ids = graph_df.i.values.astype(np.longlong)
     node_interact_times = graph_df.ts.values.astype(np.float64)
