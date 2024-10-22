@@ -292,6 +292,8 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         all_labels = labels
 
     num_classes = len(np.unique(all_labels))
+    if dataset_name == 'dsub' or dataset_name == 'dgraph':
+        num_classes = 2
     if new_spilt:
         # spilt based on the gt
         if dataset_name in double_way_datasets:
@@ -447,7 +449,8 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
         all_labels = labels
 
     num_classes = len(np.unique(all_labels))
-
+    if dataset_name == 'dsub' or dataset_name == 'dgraph':
+        num_classes = 2
     if new_spilt:
         # spilt based on the gt
         if dataset_name in double_way_datasets:

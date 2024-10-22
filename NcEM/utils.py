@@ -45,8 +45,12 @@ def log_average_metrics(logger, metric_all_runs, prefix):
                     f'± {np.std(metric_values, ddof=1):.4f}')
 
 
-def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pseudo_entropy, double_way_dataset, use_transductive=0):
-        
+def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pseudo_entropy, double_way_dataset, use_transductive=0, save=False, save_path=0):
+
+    if save:
+        os.makedirs(save_path, exist_ok=True)  
+        torch.save(pseudo_labels, os.path.join(save_path, f'raw_{iter_num}.pt'))  
+
     pseudo_entropy_list = list(pseudo_entropy)
     num_targets = len(pseudo_entropy_list)
 
@@ -86,4 +90,8 @@ def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pse
             mask_gt = torch.from_numpy((interact_times == labels_times) and train_mask).to(torch.bool)
             pseudo_labels[mask_gt] = torch.from_numpy(
                 true_labels[mask_gt].astype('float32')).unsqueeze(1).to(pseudo_labels.device)
+
+    if save:
+        torch.save(pseudo_labels, os.path.join(save_path, f'updated_{iter_num}.pt'))  
+
     return pseudo_labels, num_targets

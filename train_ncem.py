@@ -110,6 +110,8 @@ if __name__ == "__main__":
         # NcEM strating:
 
         # EM data:
+        pseudo_labels_save_path = f"processed_data/{args.dataset_name}/pseudo_labels/{args.emodel_name}/{args.seed}/"
+
         src_node_embeddings = torch.zeros(
             num_interactions, num_node_features, device=args.device)
         dst_node_embeddings = torch.zeros(
@@ -189,9 +191,10 @@ if __name__ == "__main__":
             Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
                 m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_entropy=pseudo_entropy)
-            
+
             pseudo_labels, num_targets = update_pseudo_labels(
-                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, use_pseudo_entropy=args.use_entropy, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive)
+                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, save_path=pseudo_labels_save_path, \
+                use_pseudo_entropy=args.use_entropy, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels)
 
             logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
             
@@ -241,15 +244,15 @@ if __name__ == "__main__":
         save_results(args, Etrainer, IterEval_metric_dict,
                      IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict)
 
-    # store the average metrics at the log of the last run
-    logger.info(f'metrics over {args.end_runs} runs:')
+    # # store the average metrics at the log of the last run
+    # logger.info(f'metrics over {args.end_runs} runs:')
 
-    if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
-        log_average_metrics(logger, Eval_metric_all_runs, 'Estep validate')
-        log_average_metrics(logger, Mval_metric_all_runs, 'Mstep validate')
+    # if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+    #     log_average_metrics(logger, Eval_metric_all_runs, 'Estep validate')
+    #     log_average_metrics(logger, Mval_metric_all_runs, 'Mstep validate')
 
-    log_average_metrics(logger, Etest_metric_all_runs, 'Estep test')
-    log_average_metrics(logger, Mtest_metric_all_runs, 'Mstep test')
+    # log_average_metrics(logger, Etest_metric_all_runs, 'Estep test')
+    # log_average_metrics(logger, Mtest_metric_all_runs, 'Mstep test')
     
     print(f"{best_test_all[0]:.4f} {best_test_all[1]:.4f}")
     sys.exit()
