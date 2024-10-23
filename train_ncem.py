@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
             pseudo_labels, num_targets = update_pseudo_labels(
                 data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, save_path=pseudo_labels_save_path, \
-                use_pseudo_entropy=args.use_entropy, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels)
+                use_pseudo_entropy=args.use_entropy, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k)
 
             logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
             

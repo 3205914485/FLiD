@@ -45,7 +45,7 @@ def log_average_metrics(logger, metric_all_runs, prefix):
                     f'± {np.std(metric_values, ddof=1):.4f}')
 
 
-def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pseudo_entropy, double_way_dataset, use_transductive=0, save=False, save_path=0):
+def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pseudo_entropy, double_way_dataset, use_transductive=0, save=False, save_path=0, iter_num=0):
 
     if save:
         os.makedirs(save_path, exist_ok=True)  
