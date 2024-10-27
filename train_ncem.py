@@ -36,9 +36,10 @@ if __name__ == "__main__":
     # get arguments
     args = get_node_classification_em_args()
     # get data for training, validation and testing
-    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, num_node_features, val_offest, test_offest, train_nodes, num_classes = \
+    node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, \
+        num_node_features, val_offest, test_offest, train_nodes, num_classes, ps_batch_mask = \
         get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
-                      test_ratio=args.test_ratio, new_spilt=args.new_spilt)
+                      test_ratio=args.test_ratio, new_spilt=args.new_spilt, em_patience=args.em_patience)
     args.num_classes = num_classes
     # initialize validation and test neighbor sampler to retrieve temporal graph
     full_neighbor_sampler = get_neighbor_sampler(data=full_data, sample_neighbor_strategy=args.sample_neighbor_strategy,
@@ -69,7 +70,8 @@ if __name__ == "__main__":
         "train_idx_data_loader": train_idx_data_loader,
         "val_idx_data_loader": val_idx_data_loader,
         "test_idx_data_loader": test_idx_data_loader,
-        "dataset_name": args.dataset_name
+        "dataset_name": args.dataset_name,
+        "ps_batch_mask": ps_batch_mask
     }
 
     Eval_metric_all_runs, Etest_metric_all_runs, Mval_metric_all_runs, Mtest_metric_all_runs = [], [], [], []
@@ -148,7 +150,8 @@ if __name__ == "__main__":
                       dst_node_embeddings=dst_node_embeddings)
         
         pseudo_labels, num_targets = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, use_pseudo_entropy=args.use_entropy, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive)
+            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, \
+            use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive, em_patience=args.em_patience)
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
@@ -194,7 +197,7 @@ if __name__ == "__main__":
 
             pseudo_labels, num_targets = update_pseudo_labels(
                 data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, save_path=pseudo_labels_save_path, \
-                use_pseudo_entropy=args.use_entropy, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k)
+                use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, em_patience=args.em_patience)
 
             logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
             

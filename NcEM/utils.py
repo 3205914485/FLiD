@@ -45,7 +45,7 @@ def log_average_metrics(logger, metric_all_runs, prefix):
                     f'± {np.std(metric_values, ddof=1):.4f}')
 
 
-def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pseudo_entropy, double_way_dataset, use_transductive=0, save=False, save_path=0, iter_num=0):
+def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, double_way_dataset, use_transductive=0, save=False, save_path=0, iter_num=-1,use_ps_back=0,em_patience=-1):
 
     if save:
         os.makedirs(save_path, exist_ok=True)  
@@ -54,11 +54,14 @@ def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, use_pse
     pseudo_entropy_list = list(pseudo_entropy)
     num_targets = len(pseudo_entropy_list)
 
-    if use_pseudo_entropy:
-        pseudo_entropy_list = [pseudo_confidence - 0.5 for pseudo_confidence in pseudo_entropy_list]
-        pseudo_entropy_score = torch.abs(torch.sum(torch.stack(pseudo_entropy_list),dim=0))
-        mask_entropy = pseudo_entropy_score > (threshold - 0.5) * num_targets
-        pseudo_labels[~mask_entropy] = -1
+    # if use_pseudo_entropy:
+    #     pseudo_entropy_list = [pseudo_confidence - 0.5 for pseudo_confidence in pseudo_entropy_list]
+    #     pseudo_entropy_score = torch.abs(torch.sum(torch.stack(pseudo_entropy_list),dim=0))
+    #     mask_entropy = pseudo_entropy_score > (threshold - 0.5) * num_targets
+    #     pseudo_labels[~mask_entropy] = -1
+    if use_ps_back:
+        mask_false = data['ps_batch_mask'] < em_patience - (iter_num+1) - 1
+        pseudo_labels[mask_false.T] = -1
     else :
         pass
     true_labels = data['full_data'].labels

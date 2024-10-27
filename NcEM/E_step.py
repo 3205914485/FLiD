@@ -33,7 +33,7 @@ double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
 
 
 def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
-                                              evaluate_data: Data, loss_func: nn.Module, pseudo_labels: torch.tensor, num_neighbors: int = 20, time_gap: int = 2000, use_entropy: bool = True):
+                                              evaluate_data: Data, loss_func: nn.Module, pseudo_labels: torch.tensor, num_neighbors: int = 20, time_gap: int = 2000, use_ps_back: bool = True):
     r"""
     evaluate models on the node classification task with E step
     :param model_name: str, name of the model
@@ -154,7 +154,7 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
                 mask_all = (labels == labels).to('cpu')
 
-            if use_entropy:
+            if use_ps_back:
                 whole_ps += sum(mask_all).float()
                 mask_all &= (labels != -1).to('cpu')
                 entropy_through += sum(mask_all).float()
@@ -335,7 +335,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
                 mask_ps = ~mask_gt
 
-            if args.use_entropy:
+            if args.use_ps_back:
                 whole_ps += sum(mask_ps).float()
                 mask_ps &= (labels != -1).to('cpu')
                 train_entropy_through += sum(mask_ps).float()
@@ -384,7 +384,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                                                                                                 evaluate_data=val_data,
                                                                                                 pseudo_labels=pseudo_labels,
                                                                                                 offest=val_offest,
-                                                                                                use_entropy=args.use_entropy,
+                                                                                                use_ps_back=args.use_ps_back,
                                                                                                 loss_func=loss_func,
                                                                                                 num_neighbors=args.num_neighbors,
                                                                                                 time_gap=args.time_gap)
@@ -412,7 +412,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                                                                                                        evaluate_idx_data_loader=test_idx_data_loader,
                                                                                                        evaluate_data=test_data,
                                                                                                        offest=test_offest,
-                                                                                                       use_entropy=args.use_entropy,
+                                                                                                       use_ps_back=args.use_ps_back,
                                                                                                        pseudo_labels=pseudo_labels,
                                                                                                        loss_func=loss_func,
                                                                                                        num_neighbors=args.num_neighbors,
@@ -466,7 +466,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                                                                                                evaluate_idx_data_loader=val_idx_data_loader,
                                                                                                evaluate_data=val_data,
                                                                                                offest=val_offest,
-                                                                                               use_entropy=args.use_entropy,
+                                                                                               use_ps_back=args.use_ps_back,
                                                                                                pseudo_labels=pseudo_labels,
                                                                                                loss_func=loss_func,
                                                                                                num_neighbors=args.num_neighbors,
@@ -479,7 +479,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                                                                                                evaluate_idx_data_loader=test_idx_data_loader,
                                                                                                evaluate_data=test_data,
                                                                                                offest=test_offest,
-                                                                                               use_entropy=args.use_entropy,
+                                                                                               use_ps_back=args.use_ps_back,
                                                                                                pseudo_labels=pseudo_labels,
                                                                                                loss_func=loss_func,
                                                                                                num_neighbors=args.num_neighbors,
@@ -694,7 +694,7 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
                 # transductive
                 mask_gt = torch.from_numpy(
                     (batch_node_interact_times == batch_labels_times)  & np.isin(batch_src_node_ids,train_nodes)).to(torch.bool)
-            if args.use_entropy:
+            if args.use_ps_back:
                 mask_ps = (labels != -1).to('cpu')
                 train_entropy_through += sum(mask_ps)
                 mask_ps &= ~mask_gt
@@ -747,7 +747,7 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
                                                                                                 evaluate_data=val_data,
                                                                                                 pseudo_labels=pseudo_labels,
                                                                                                 offest=val_offest,
-                                                                                                use_entropy=args.use_entropy,
+                                                                                                use_ps_back=args.use_ps_back,
                                                                                                 loss_func=loss_func,
                                                                                                 num_neighbors=args.num_neighbors,
                                                                                                 time_gap=args.time_gap)
@@ -775,7 +775,7 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
                                                                                                        evaluate_idx_data_loader=test_idx_data_loader,
                                                                                                        evaluate_data=test_data,
                                                                                                        offest=test_offest,
-                                                                                                       use_entropy=args.use_entropy,
+                                                                                                       use_ps_back=args.use_ps_back,
                                                                                                        pseudo_labels=pseudo_labels,
                                                                                                        loss_func=loss_func,
                                                                                                        num_neighbors=args.num_neighbors,
@@ -829,7 +829,7 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
                                                                                                evaluate_idx_data_loader=val_idx_data_loader,
                                                                                                evaluate_data=val_data,
                                                                                                offest=val_offest,
-                                                                                               use_entropy=args.use_entropy,
+                                                                                               use_ps_back=args.use_ps_back,
                                                                                                pseudo_labels=pseudo_labels,
                                                                                                loss_func=loss_func,
                                                                                                num_neighbors=args.num_neighbors,
@@ -842,7 +842,7 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
                                                                                                evaluate_idx_data_loader=test_idx_data_loader,
                                                                                                evaluate_data=test_data,
                                                                                                offest=test_offest,
-                                                                                               use_entropy=args.use_entropy,
+                                                                                               use_ps_back=args.use_ps_back,
                                                                                                pseudo_labels=pseudo_labels,
                                                                                                loss_func=loss_func,
                                                                                                num_neighbors=args.num_neighbors,

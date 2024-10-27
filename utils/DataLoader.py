@@ -374,7 +374,7 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
     return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes, num_classes
 
 
-def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pretrained: bool=True, new_spilt: bool=False):
+def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pretrained: bool=True, new_spilt: bool=False, em_patience: float=5):
     """
     generate data for Node classificatin task with EM algorithm
     :param dataset_name: str, dataset name
@@ -447,6 +447,41 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
         all_labels = np.concatenate(labels)
     else:
         all_labels = labels
+
+    showup = {}
+    for row in graph_df.itertuples(index=False):
+        showup[row.u] = showup.get(row.u, 0) + 1
+        showup[row.i] = showup.get(row.i, 0) + 1
+
+    ps_batch_mask = np.zeros((len(graph_df), 2), dtype=int)
+
+    occurrence_tracker = {key: 0 for key in showup}
+
+    for index, row in enumerate(graph_df.itertuples(index=False)):
+        for j, point in enumerate((row.u, row.i)):
+            total_occurrences = showup[point]
+            
+            effective_occurrences = total_occurrences - 1
+            if effective_occurrences == occurrence_tracker[point]:
+                ps_batch_mask[index, j] = -1
+                continue
+            if effective_occurrences < em_patience:
+                batch_sequence = list(range(em_patience-effective_occurrences, em_patience))
+                batch = batch_sequence[occurrence_tracker[point]]
+            else:
+                batch_size = effective_occurrences // em_patience
+                extra = effective_occurrences % em_patience
+
+                current_occurrence = occurrence_tracker[point]
+
+                if current_occurrence < extra * (batch_size + 1):
+                    batch = current_occurrence // (batch_size + 1)
+                else:
+                    batch = (current_occurrence - extra) // batch_size
+
+            ps_batch_mask[index, j] = batch
+
+            occurrence_tracker[point] += 1
 
     num_classes = len(np.unique(all_labels))
     if dataset_name == 'dsub' or dataset_name == 'dgraph':
@@ -538,4 +573,4 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
     # print("The test dataset has {} interactions, involving {} different nodes".format(
     #     test_data.num_interactions, test_data.num_unique_nodes)) 
     
-    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, full_data.num_interactions, NODE_FEAT_DIM, val_offest, test_offest, train_nodes, num_classes
+    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, full_data.num_interactions, NODE_FEAT_DIM, val_offest, test_offest, train_nodes, num_classes, ps_batch_mask
