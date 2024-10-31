@@ -325,15 +325,15 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
             else:
                 predicts = model(x=batch_src_node_embeddings)
         probabilities = torch.softmax(predicts, dim=1)
-        _, binary_predicts = torch.max(probabilities, dim=1)
+        _, one_hot_predicts = torch.max(probabilities, dim=1)
 
         if args.dataset_name in double_way_datasets:
-            binary_predicts = torch.stack([binary_predicts[:binary_predicts.shape[0]//2],binary_predicts[binary_predicts.shape[0]//2:]],dim=0)
-            pseudo_labels_list.append(binary_predicts.to(torch.long))
+            one_hot_predicts = torch.stack([one_hot_predicts[:one_hot_predicts.shape[0]//2],one_hot_predicts[one_hot_predicts.shape[0]//2:]],dim=0)
+            pseudo_labels_list.append(one_hot_predicts.to(torch.long))
             pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
             confidence_list.append(pseudo_entropy_batch)
         else:
-            pseudo_labels_list.append(binary_predicts.to(torch.long))
+            pseudo_labels_list.append(one_hot_predicts.to(torch.long))
             confidence_list.append(probabilities[0])
 
     if not train:

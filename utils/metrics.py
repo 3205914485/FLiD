@@ -39,7 +39,7 @@ def get_node_classification_metrics_em(predicts: torch.Tensor, labels: torch.Ten
     accuracy = accuracy_score(y_true=labels_np, y_pred=predicted_classes)
     
     # Calculate ROC AUC score for each class, then average
-    if len(np.unique(labels_np)) > 1:
+    if len(np.unique(labels_np)) == predicts_np.shape[1]:
         if predicts_np.shape[1] == 2:
             roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np[:, 1])
         else:
