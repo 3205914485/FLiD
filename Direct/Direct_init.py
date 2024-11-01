@@ -8,7 +8,7 @@ from models.DyGFormer import DyGFormer
 from models.modules import MLPClassifier, MLPClassifier_BN
 from utils.utils import convert_to_gpu
 from torch import nn
-from NcEM.trainer import Trainer
+from Direct.trainer import Trainer
 
 
 def Direct_init(args, node_raw_features, edge_raw_features, train_data, full_neighbor_sampler, logger):

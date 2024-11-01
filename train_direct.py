@@ -17,10 +17,10 @@ from utils.DataLoader import get_idx_data_loader, get_NcEM_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_direct_args
 
-from NcEM.Direct_init import Direct_init
-from NcEM.EM_warmup import em_warmup
-from NcEM.Direct import Direct
-from NcEM.utils import log_and_save_metrics, log_average_metrics, save_results, update_pseudo_labels
+from Direct.Direct_init import Direct_init
+from Direct.Direct_warmup import Direct_warmup
+from Direct.Direct import Direct
+from Direct.utils import log_and_save_metrics, log_average_metrics, save_results, update_pseudo_labels
 
 cpu_num = 2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
@@ -131,37 +131,9 @@ if __name__ == "__main__":
                                      edge_raw_features=edge_raw_features,
                                      full_neighbor_sampler=full_neighbor_sampler
                                      )
-
-        {
-            # base_val_total_loss, base_val_metrics, base_test_total_loss, base_test_metrics = \
-            #     em_warmup(args=args,
-            #               data=data,
-            #               logger=logger,
-            #               Etrainer=Etrainer,
-            #               Mtrainer=Mtrainer,
-            #               pseudo_labels=pseudo_labels,
-            #               pseudo_entropy=pseudo_entropy,
-            #               src_node_embeddings=src_node_embeddings,
-            #               dst_node_embeddings=dst_node_embeddings)
-            
-            # pseudo_labels, num_targets = update_pseudo_labels(
-            #     data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, \
-            #     use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive, em_patience=args.em_patience)
-
-            # if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
-            #     log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
-            #                          base_val_metrics, base_val_metric_dict, 'validate')
-            # log_and_save_metrics(logger, 'Warm-up base', base_test_total_loss,
-            #                      base_test_metrics, base_test_metric_dict, 'test')
-
-            # if args.warmup_e_train or args.warmup_m_train:
-            #     if run < args.end_runs - 1:
-            #         logger.removeHandler(fh)
-            #         logger.removeHandler(ch)
-            #     continue
-
-            # EM training
-        }
+        if args.warmup_e_train:
+            Direct_warmup(args=args, data=data, logger=logger, Dirtrainer=Dirtrainer)
+        
         model_name = Dirtrainer.model_name
         save_model_name = f'Direct_{model_name}'
         save_model_folder = f"./saved_models/Direct/whole/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
