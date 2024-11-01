@@ -1,29 +1,13 @@
-import logging
-import time
-import sys
 import os
 from tqdm import tqdm
 import numpy as np
-import warnings
 import shutil
-import json
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from models.TGAT import TGAT
-from models.MemoryModel import MemoryModel, compute_src_dst_node_time_shifts
-from models.CAWN import CAWN
-from models.TCL import TCL
-from models.GraphMixer import GraphMixer
-from models.M import M
-from models.DyGFormer import DyGFormer
-from models.modules import MergeLayer, MLPClassifier
-from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes, create_optimizer
-from utils.utils import get_neighbor_sampler
-from utils.metrics import get_link_prediction_metrics, get_node_classification_metrics_em
-from utils.utils import set_random_seed
-from utils.utils import NegativeEdgeSampler, NeighborSampler
+from utils.metrics import get_node_classification_metrics_em
+from utils.utils import  NeighborSampler
 from utils.DataLoader import Data
 from utils.EarlyStopping import EarlyStopping
 
@@ -35,7 +19,7 @@ double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
 def evaluate_model_node_classification_direct(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
                                               evaluate_data: Data, loss_func: nn.Module, pseudo_labels: torch.tensor, num_neighbors: int = 20, time_gap: int = 2000, use_ps_back: bool = True):
     r"""
-    evaluate models on the node classification task with E step
+    evaluate models on the node classification task directly
     :param model_name: str, name of the model
     :param model: nn.Module, the model to be evaluated
     :param neighbor_sampler: NeighborSampler, neighbor sampler
@@ -187,9 +171,9 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
     return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt, entropy_through/whole_ps
 
 
-def Direct(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, pseudo_entropy):
+def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, pseudo_entropy):
 
-    logger.info(f"Starting E-step\n")
+    logger.info(f"Starting Direct-train\n")
     full_data = data['full_data']
     train_data = data["train_data"]
     val_data = data["val_data"]
@@ -202,19 +186,12 @@ def Direct(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
     val_idx_data_loader = data["val_idx_data_loader"]
     test_idx_data_loader = data["test_idx_data_loader"]
 
-    dynamic_backbone = Etrainer.model
-    if args.decoder == 1:
-        node_classifier = Mtrainer.model[1]
-    else:
-        node_classifier = Mtrainer.model[0]
-        
-    model = nn.Sequential(dynamic_backbone, node_classifier)
-    optimizer = create_optimizer(model=model, optimizer_name=args.optimizer,
-                                    learning_rate=args.learning_rate, weight_decay=args.weight_decay)
+    model = Dirtrainer.model
+    optimizer = Dirtrainer.optimizer
+    model_name = Dirtrainer.model_name
+    loss_func = Dirtrainer.criterion
 
-    model_name = Etrainer.model_name
-    loss_func = Etrainer.criterion
-    save_model_name = f'ncem_{model_name}'
+    save_model_name = f'dir_{model_name}'
     save_model_folder = f"./saved_models/direct/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
 
     shutil.rmtree(save_model_folder, ignore_errors=True)
@@ -222,7 +199,7 @@ def Direct(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
     early_stopping = EarlyStopping(patience=args.patience, save_model_folder=save_model_folder,
                                    save_model_name=save_model_name, logger=logger, model_name=model_name)
     best_metrics, best_metrics_gt = {'roc_auc': 0.0, 'accuracy': 0.0}, {'roc_auc': 0.0, 'accuracy': 0.0}
-    for epoch in range(args.num_epochs_e_step):
+    for epoch in range(args.num_epochs_direct):
         model.train()
         if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
             # training process, set the neighbor sampler
@@ -431,21 +408,21 @@ def Direct(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
             for metric_name in test_metrics_gt.keys():
                 logger.info(
                     f'Groun Truth test {metric_name}, {test_metrics_gt[metric_name]:.4f}')
-        # select the best model based on all the validate metrics
-        test_metric_indicator = []
+        # select the best model based on all the gt test metrics
+        test_metric_gt_indicator = []
         for metric_name in test_metrics.keys():
-            test_metric_indicator.append(
-                (metric_name, test_metrics[metric_name], True))
-        early_stop = early_stopping.step(test_metric_indicator, model)
+            test_metric_gt_indicator.append(
+                (metric_name, test_metrics_gt[metric_name], True))
+        early_stop = early_stopping.step(test_metric_gt_indicator, model)
 
         if test_metrics['roc_auc'] > best_metrics['roc_auc']:
             best_metrics = test_metrics
-            best_epoch = epoch
         for metric_name in best_metrics.keys():
             logger.info(
                 f'Best test {metric_name}, {best_metrics[metric_name]:.4f}')
         if test_metrics_gt['roc_auc'] > best_metrics_gt['roc_auc']:
             best_metrics_gt = test_metrics_gt
+            best_epoch = epoch
         for metric_name in best_metrics_gt.keys():
             logger.info(
                 f'Best test Ground Truth {metric_name}, {best_metrics_gt[metric_name]:.4f}')
@@ -486,7 +463,7 @@ def Direct(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                                                                                                num_neighbors=args.num_neighbors,
                                                                                                time_gap=args.time_gap)
     for metric_name in test_metrics_gt.keys():
-        logger.info(f'test {metric_name}, {test_metrics_gt[metric_name]:.4f}')
+        logger.info(f'Best Test Ground Truth {metric_name}, {test_metrics_gt[metric_name]:.4f}')
 
     # generating the pseudo_labels
     pseudo_labels_list, confidence_list, pseudo_entropy_list = [], [], []

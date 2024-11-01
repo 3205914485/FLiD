@@ -17,7 +17,7 @@ from utils.DataLoader import get_idx_data_loader, get_NcEM_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_direct_args
 
-from NcEM.EM_init import em_init
+from NcEM.Direct_init import Direct_init
 from NcEM.EM_warmup import em_warmup
 from NcEM.Direct import Direct
 from NcEM.utils import log_and_save_metrics, log_average_metrics, save_results, update_pseudo_labels
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, \
         num_node_features, val_offest, test_offest, train_nodes, num_classes, ps_batch_mask = \
         get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
-                      test_ratio=args.test_ratio, new_spilt=args.new_spilt, em_patience=args.em_patience)
+                      test_ratio=args.test_ratio, new_spilt=args.new_spilt, em_patience=args.iter_patience)
     args.num_classes = num_classes
     # initialize validation and test neighbor sampler to retrieve temporal graph
     full_neighbor_sampler = get_neighbor_sampler(data=full_data, sample_neighbor_strategy=args.sample_neighbor_strategy,
@@ -124,7 +124,7 @@ if __name__ == "__main__":
         base_val_metric_dict, base_test_metric_dict, Direct_metric_dict, Direct_metric_dict = {}, {}, {}, {}
        
         # EM Warmup
-        Etrainer, Mtrainer = em_init(args=args,
+        Dirtrainer = Direct_init(args=args,
                                      logger=logger,
                                      train_data=train_data,
                                      node_raw_features=node_raw_features,
@@ -162,33 +162,33 @@ if __name__ == "__main__":
 
             # EM training
         }
-        model_name = Etrainer.model_name
+        model_name = Dirtrainer.model_name
         save_model_name = f'Direct_{model_name}'
         save_model_folder = f"./saved_models/Direct/whole/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
         shutil.rmtree(save_model_folder, ignore_errors=True)
         os.makedirs(save_model_folder, exist_ok=True)
-        early_stopping = EarlyStopping(patience=args.em_patience, save_model_folder=save_model_folder,
+        early_stopping = EarlyStopping(patience=args.iter_patience, save_model_folder=save_model_folder,
                                        save_model_name=save_model_name, logger=logger, model_name=model_name)
 
         IterDirect_metric_dict, IterDirect_metric_dict= {}, {}
         best_test_all = [0.0,0.0]
-        for k in range(args.num_em_iters):
+        for k in range(args.num_iters):
             logger.info(f'Direct train Iter {k + 1} starts.\n')
             if args.gt_weight != 1.0 and k != 0:
                 gt_weight = 0.1 + (args.gt_weight - 0.1) * np.exp(-0.1 * k)
             else:
                 gt_weight = 1.0
             Direct_total_Loss, Direct_metrics, Direct_total_loss, Direct_metrics = \
-                Direct(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, 
-                Mtrainer=Mtrainer, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy)
+                Direct(args=args, gt_weight=gt_weight, data=data, logger=logger, Dirtrainer=Dirtrainer, 
+                pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy)
 
             pseudo_labels, num_targets = update_pseudo_labels(
                 data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, save_path=pseudo_labels_save_path, \
-                use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, em_patience=args.em_patience)
+                use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, em_patience=args.iter_patience)
 
             logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
             
-            if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+            if Dirtrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
                 log_and_save_metrics(
                     logger, 'Direct', Direct_total_Loss, Direct_metrics, Direct_metric_dict, 'validate')
             log_and_save_metrics(
@@ -196,7 +196,7 @@ if __name__ == "__main__":
 
             if list(Direct_metrics.values())[0] > best_test_all[0]:
                 best_test_all = list(Direct_metrics.values())
-                if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+                if Dirtrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
                     IterDirect_metric_dict = Direct_metric_dict
                 IterDirect_metric_dict = Direct_metric_dict
 
@@ -207,7 +207,7 @@ if __name__ == "__main__":
                 test_metric_indicator.append(
                     (metric_name, Direct_metrics[metric_name], True))
             early_stop = early_stopping.step(
-                test_metric_indicator, nn.Sequential(Etrainer.model, Mtrainer.model))
+                test_metric_indicator, Dirtrainer.model)
 
             if early_stop[0]:
                 break
