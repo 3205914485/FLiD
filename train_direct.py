@@ -172,12 +172,18 @@ if __name__ == "__main__":
 
         IterDirect_metric_dict, IterDirect_metric_dict= {}, {}
         best_test_all = [0.0,0.0]
+        # update first to get the ground truth for pseudo labels
+        pseudo_labels, num_targets = update_pseudo_labels(
+            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, save_path=pseudo_labels_save_path, \
+            double_way_dataset=double_way_datasets, use_transductive=args.use_transductive)
+
         for k in range(args.num_iters):
             logger.info(f'Direct train Iter {k + 1} starts.\n')
             if args.gt_weight != 1.0 and k != 0:
                 gt_weight = 0.1 + (args.gt_weight - 0.1) * np.exp(-0.1 * k)
             else:
                 gt_weight = 1.0
+
             Direct_total_Loss, Direct_metrics, Direct_total_loss, Direct_metrics = \
                 Direct(args=args, gt_weight=gt_weight, data=data, logger=logger, Dirtrainer=Dirtrainer, 
                 pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy)

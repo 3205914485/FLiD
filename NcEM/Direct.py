@@ -351,7 +351,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
                 f'train {metric_name}, {train_metrics[metric_name]:.4f}')
         for metric_name in train_metrics_gt.keys():
             logger.info(
-                f'Ground Truth validate {metric_name}, {train_metrics_gt[metric_name]:.4f}')            
+                f'Ground Truth train {metric_name}, {train_metrics_gt[metric_name]:.4f}')            
 
         val_total_loss, val_metrics, val_metrics_gt, val_entropy_through = evaluate_model_node_classification_direct(model_name=model_name,
                                                                                                 model=model,
