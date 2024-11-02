@@ -316,7 +316,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
             loss_gt = torch.tensor(0.0) if torch.isnan(loss_gt) else loss_gt
             loss_ps = loss_func(input=predicts_ps, target=labels_ps)
             loss_ps = torch.tensor(0.0) if torch.isnan(loss_ps) else loss_ps
-            loss = gt_weight*loss_gt + (1-gt_weight)*loss_ps
+            loss = loss_gt + (1-gt_weight)*loss_ps
             train_total_loss += loss.item()
             train_y_trues.append(labels[mask_ps])
             train_y_predicts.append(predicts[mask_ps])
