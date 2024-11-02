@@ -513,6 +513,7 @@ def get_node_classification_direct_args():
     parser.add_argument('--e_warmup_patience', type=int, default=20, help='patience specific for encoder warmup')   
 
     # EM-Iter settings:
+    parser.add_argument('--alpha', type=float, default=0.1, help='the decay of ground truth')     
     parser.add_argument('--negative_weight', type=float, default=1.0, help='negative_weight to make the negative samples consider better')    
     parser.add_argument('--use_ps_back', type=int, default=0, help='Whether update the pseudo labels backwards step by step')
     parser.add_argument('--pseudo_entropy_ws', type=int, default=25, help='Pseudo_entropy window size')    

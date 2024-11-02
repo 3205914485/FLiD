@@ -152,7 +152,7 @@ if __name__ == "__main__":
         for k in range(args.num_iters):
             logger.info(f'Direct train Iter {k + 1} starts.\n')
             if args.gt_weight != 1.0 and k != 0:
-                gt_weight = 0.1 + (args.gt_weight - 0.1) * np.exp(-0.1 * k)
+                gt_weight = 0.1 + (args.gt_weight - 0.1) * np.exp(-args.alpha * k)
             else:
                 gt_weight = 1.0
 
