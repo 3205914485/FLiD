@@ -35,7 +35,7 @@ from NcEM.trainer import Trainer
 from NcEM.M_step import train_model_node_classification_withembeddings
 
 
-def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node_embeddings, dst_node_embeddings, pseudo_labels, pseudo_entropy):
+def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node_embeddings, dst_node_embeddings, pseudo_labels):
 
     logger.info("\nStart Warming up\n")
     logger.info("Warm-up-1 : Start training link prediction for backbone\n")
@@ -59,7 +59,6 @@ def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node
             train=args.warmup_m_train,
             patience=args.mw_patience,
             pseudo_labels=pseudo_labels,
-            pseudo_entropy=pseudo_entropy,
             save_model_folder=save_model_folder,
             num_epochs=args.num_epochs_m_warmup,
             src_node_embeddings=src_node_embeddings,

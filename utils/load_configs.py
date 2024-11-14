@@ -266,9 +266,8 @@ def get_node_classification_args():
     """
     # arguments
     parser = argparse.ArgumentParser('Interface for the node classification task')
-    parser.add_argument('--mode',type=str,default='dt')
     parser.add_argument('--prefix',type=str,help='prefix of work')
-    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='yelp', choices=['wikipedia','bot', 'bot22','reddit','rt_wiki','dsub','dgraph','yelp'])
+    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['wikipedia', 'mooc','bot', 'bot22','reddit','rt_wiki','dsub','dgraph','yelp'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--model_name', type=str, default='TGAT', help='name of the model',
                         choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer','M'])
@@ -377,7 +376,6 @@ def load_node_classification_best_configs(args: argparse.Namespace):
     else:
         raise ValueError(f"Wrong value for model_name {args.model_name}!")
 
-
 def get_node_classification_em_args():
     """
     get the args for the node classification task
@@ -388,14 +386,14 @@ def get_node_classification_em_args():
 
     # Configuration of the experiment
     parser.add_argument('--prefix',type=str, default='test', help='prefix of work')
-    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='yelp', choices=['wikipedia','bot', 'bot22','reddit','rt_wiki','taobao','yelp','dsub','dgraph'])
+    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['wikipedia', 'mooc','bot', 'bot22','reddit','rt_wiki','taobao','yelp','dsub','dgraph'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--emodel_name', type=str, default='TGAT', help='name of the model of dyg backbone',
                         choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer','M'])
     parser.add_argument('--mmodel_name', type=str, default='mlp', help='name of the model of decoder',
                         choices=['mlp','mlp_bn'])    
     parser.add_argument('--gpu', type=int, default=7, help='number of gpu to use')
-    parser.add_argument('--save_pseudo_labels', type=int, default=0, help='Whether save the pseudo labels')   
+    parser.add_argument('--save_pseudo_labels', type=int, default=1, help='Whether save the pseudo labels')   
     #training settings:
     
     parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')
@@ -479,7 +477,7 @@ def get_node_classification_direct_args():
 
     # Configuration of the experiment
     parser.add_argument('--prefix',type=str, default='test', help='prefix of work')
-    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='yelp', choices=['wikipedia','bot', 'bot22','reddit','rt_wiki','taobao','yelp','dsub','dgraph'])
+    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['wikipedia', 'mooc','bot', 'bot22','reddit','rt_wiki','taobao','yelp','dsub','dgraph'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--emodel_name', type=str, default='TGAT', help='name of the model of dyg backbone',
                         choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer','M'])

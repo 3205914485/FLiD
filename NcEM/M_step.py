@@ -39,7 +39,7 @@ double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
 
 def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset: str, src_node_embeddings: torch.tensor,
                                                       dst_node_embeddings: torch.tensor, evaluate_idx_data_loader: DataLoader,
-                                                      evaluate_data: Data, loss_func: nn.Module, pseudo_entropy_list_list: list=[]):
+                                                      evaluate_data: Data, loss_func: nn.Module):
 
     model.eval()
 
@@ -81,16 +81,12 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
                         (batch_node_interact_times == batch_labels_times[1])).to(torch.bool)
                 mask = torch.cat([mask_gt_src, mask_gt_dst],dim=0).squeeze(dim=-1)
                 probabilities = torch.softmax(predicts, dim=1)
-                pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
-                pseudo_entropy_list_list.append(pseudo_entropy_batch.detach())
             else:
                 predicts = model(x=batch_src_node_embeddings)
                 labels = torch.from_numpy(
                     batch_labels).long().to(predicts.device)
                 mask = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
-                pseudo_entropy_list_list.append(
-                    torch.softmax(predicts, dim=1).detach()[0])
             filtered_predicts = predicts[mask]
             filtered_labels = labels[mask]
 
@@ -120,7 +116,7 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
 
 
 def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, data, logger, save_model_folder, patience, train,
-                                                   src_node_embeddings, dst_node_embeddings, pseudo_labels, pseudo_entropy, num_epochs):
+                                                   src_node_embeddings, dst_node_embeddings, pseudo_labels, num_epochs):
 
     full_data = data['full_data']
     train_data = data["train_data"]
@@ -141,13 +137,12 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
     early_stopping = EarlyStopping(patience=patience, save_model_folder=save_model_folder,
                                    save_model_name=save_model_name, logger=logger, model_name=model_name)
     loss_func = Mtrainer.criterion
-    pseudo_entropy_list = []
     if train:
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
         best_metrics, best_epoch = {'roc_auc': 0.0, 'accuracy': 0.0}, 0
         for epoch in range(num_epochs):
 
-            train_total_loss, train_y_trues, train_y_predicts, batch_count, pseudo_entropy_list_list = 0.0, [], [], 0.0, []
+            train_total_loss, train_y_trues, train_y_predicts, batch_count = 0.0, [], [], 0.0
             for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
                 train_data_indices = train_data_indices.numpy()
                 if args.dataset_name in double_way_datasets:
@@ -182,17 +177,13 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                     mask = torch.cat(
                         [mask_gt_src, mask_gt_dst], dim=0).squeeze(dim=-1)
                     probabilities = torch.softmax(predicts, dim=1)
-                    pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
-                    pseudo_entropy_list_list.append(pseudo_entropy_batch.detach())
                 else:
                     predicts = model(x=batch_src_node_embeddings)
                     labels = torch.from_numpy(batch_labels).to(
                         torch.long).to(predicts.device)
                     mask = torch.from_numpy(
                         batch_node_interact_times == batch_labels_times).to(torch.bool)
-                    pseudo_entropy_list_list.append(
-                            torch.softmax(predicts, dim=1).detach()[0])    
-                
+
                 filtered_predicts = predicts[mask]
                 filtered_labels = labels[mask]
 
@@ -228,7 +219,6 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                                                                                             src_node_embeddings=src_node_embeddings,
                                                                                             dst_node_embeddings=dst_node_embeddings,
                                                                                             evaluate_idx_data_loader=val_idx_data_loader,
-                                                                                            pseudo_entropy_list_list=pseudo_entropy_list_list,
                                                                                             evaluate_data=val_data,
                                                                                             loss_func=loss_func)
 
@@ -249,7 +239,6 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                                                                                                   src_node_embeddings=src_node_embeddings,
                                                                                                   dst_node_embeddings=dst_node_embeddings,
                                                                                                   evaluate_idx_data_loader=test_idx_data_loader,
-                                                                                                  pseudo_entropy_list_list=pseudo_entropy_list_list,
                                                                                                   evaluate_data=test_data,
                                                                                                   loss_func=loss_func)
 
@@ -272,7 +261,6 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
                 logger.info(
                     f'best test {metric_name}: {best_metrics[metric_name]:.4f}')
 
-            pseudo_entropy_list.append(torch.cat(pseudo_entropy_list_list, dim=1))
             if early_stop[0]:
                 break
 
@@ -330,25 +318,19 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
         if args.dataset_name in double_way_datasets:
             one_hot_predicts = torch.stack([one_hot_predicts[:one_hot_predicts.shape[0]//2],one_hot_predicts[one_hot_predicts.shape[0]//2:]],dim=0)
             pseudo_labels_list.append(one_hot_predicts.to(torch.long))
-            pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
-            confidence_list.append(pseudo_entropy_batch)
         else:
             pseudo_labels_list.append(one_hot_predicts.to(torch.long))
-            confidence_list.append(probabilities[0])
 
-    if not train:
-        pseudo_entropy_list.append(torch.cat(confidence_list, dim=1))
-        best_epoch = 0
+
     if args.dataset_name in double_way_datasets: 
         new_labels = torch.cat(pseudo_labels_list, dim=1).detach()
     else:
-        new_labels = torch.cat(pseudo_labels_list, dim=0).detach().unsqueeze(dim=-1)
+        new_labels = torch.cat(pseudo_labels_list, dim=0).detach()
     pseudo_labels.copy_(new_labels)
-    pseudo_entropy.extend(pseudo_entropy_list[max(0, best_epoch-args.pseudo_entropy_ws): best_epoch+1])
     return val_total_loss, val_metrics, test_total_loss, test_metrics
 
 
-def m_step(Etrainer, Mtrainer, data, args, logger, src_node_embeddings, dst_node_embeddings, pseudo_labels, pseudo_entropy):
+def m_step(Etrainer, Mtrainer, data, args, logger, src_node_embeddings, dst_node_embeddings, pseudo_labels):
     logger.info("Starting M-step \n")
     save_model_name = f'ncem_{Etrainer.model_name}'
     save_model_folder = f"./saved_models/ncem/M/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
@@ -361,7 +343,6 @@ def m_step(Etrainer, Mtrainer, data, args, logger, src_node_embeddings, dst_node
                                                        train=True,
                                                        patience=args.patience,
                                                        pseudo_labels=pseudo_labels,
-                                                       pseudo_entropy=pseudo_entropy,
                                                        save_model_folder=save_model_folder,
                                                        num_epochs=args.num_epochs_m_step,
                                                        src_node_embeddings=src_node_embeddings,

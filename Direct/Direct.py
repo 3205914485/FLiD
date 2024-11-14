@@ -52,10 +52,10 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
                     [evaluate_data.labels_time[0][evaluate_data_indices], evaluate_data.labels_time[1][evaluate_data_indices]]
                         
             else:
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
                     evaluate_data.src_node_ids[evaluate_data_indices],  evaluate_data.dst_node_ids[evaluate_data_indices], \
-                    evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], pseudo_labels[evaluate_data_indices+offest], \
-                    evaluate_data.labels_time[evaluate_data_indices]
+                    evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], pseudo_labels[0][evaluate_data_indices+offest], \
+                    evaluate_data.labels[evaluate_data_indices], evaluate_data.labels_time[evaluate_data_indices]
 
             if model_name in ['TGAT', 'CAWN', 'TCL']:
                 # get temporal embedding of source and destination nodes
@@ -227,7 +227,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
             else:
                 batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
-                    train_data.edge_ids[train_data_indices], pseudo_labels[train_data_indices], train_data.labels_time[train_data_indices]
+                    train_data.edge_ids[train_data_indices], pseudo_labels[0][train_data_indices], train_data.labels_time[train_data_indices]
 
             if model_name in ['TGAT', 'CAWN', 'TCL']:
                 # get temporal embedding of source and destination nodes
@@ -537,7 +537,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
     if args.dataset_name in double_way_datasets: 
         new_labels = torch.cat(pseudo_labels_list, dim=1).detach()
     else:
-        new_labels = torch.cat(pseudo_labels_list, dim=0).detach().unsqueeze(dim=-1)
+        new_labels = torch.cat(pseudo_labels_list, dim=0).detach()
     pseudo_labels.copy_(new_labels)
     pseudo_entropy.extend(pseudo_entropy_list[max(0, best_epoch-args.pseudo_entropy_ws): best_epoch+1])
     return val_total_loss, val_metrics_gt, test_total_loss, test_metrics_gt

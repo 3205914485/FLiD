@@ -118,7 +118,6 @@ if __name__ == "__main__":
             num_interactions, num_node_features, device=args.device)
         dst_node_embeddings = torch.zeros(
             num_interactions, num_node_features, device=args.device)
-        pseudo_entropy = deque(maxlen=args.pseudo_entropy_ws)
 
         if args.dataset_name in double_way_datasets:
             pseudo_labels = torch.zeros(
@@ -145,12 +144,11 @@ if __name__ == "__main__":
                       Etrainer=Etrainer,
                       Mtrainer=Mtrainer,
                       pseudo_labels=pseudo_labels,
-                      pseudo_entropy=pseudo_entropy,
                       src_node_embeddings=src_node_embeddings,
                       dst_node_embeddings=dst_node_embeddings)
         
-        pseudo_labels, num_targets = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, \
+        pseudo_labels = update_pseudo_labels(
+            data=data, pseudo_labels=pseudo_labels, \
             use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive, em_patience=args.em_patience)
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
@@ -193,13 +191,11 @@ if __name__ == "__main__":
 
             Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
                 m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                       src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, pseudo_entropy=pseudo_entropy)
+                       src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
 
-            pseudo_labels, num_targets = update_pseudo_labels(
-                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, save_path=pseudo_labels_save_path, \
+            pseudo_labels = update_pseudo_labels(
+                data=data, pseudo_labels=pseudo_labels, save_path=pseudo_labels_save_path, \
                 use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, em_patience=args.em_patience)
-
-            logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
             
             if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
                 log_and_save_metrics(

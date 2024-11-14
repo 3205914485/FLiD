@@ -79,8 +79,8 @@ def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, double_
                 true_labels[1][mask_gt_i].astype('float32')).to(pseudo_labels.device)
         else:
             mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
-            pseudo_labels[mask_gt] = torch.from_numpy(
-                true_labels[mask_gt].astype('float32')).unsqueeze(1).to(pseudo_labels.device)
+            pseudo_labels[0,mask_gt] = torch.from_numpy(
+                true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
     else :
         if data['dataset_name'] in double_way_dataset:
             mask_gt_u = torch.from_numpy((interact_times == labels_times[0]) & train_mask).to(torch.bool) 
@@ -91,8 +91,8 @@ def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, double_
                 true_labels[1][mask_gt_i].astype('float32')).to(pseudo_labels.device)
         else:
             mask_gt = torch.from_numpy((interact_times == labels_times) and train_mask).to(torch.bool)
-            pseudo_labels[mask_gt] = torch.from_numpy(
-                true_labels[mask_gt].astype('float32')).unsqueeze(1).to(pseudo_labels.device)
+            pseudo_labels[0,mask_gt] = torch.from_numpy(
+                true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
 
     if save:
         torch.save(pseudo_labels, os.path.join(save_path, f'updated_{iter_num}.pt'))  

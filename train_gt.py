@@ -250,7 +250,7 @@ if __name__ == "__main__":
                     labels = torch.from_numpy(np.concatenate(
                         [batch_labels[0][mask_src], batch_labels[1][mask_dst]], axis=0)).to(torch.long).to(predicts.device)
                 else:
-                    mask_train_src = np.isin(batch_edge_ids[0],train_nodes)
+                    mask_train_src = np.isin(batch_src_node_ids,train_nodes)
                     predicts = model[1](x=batch_src_node_embeddings[mask_train_src]).squeeze(dim=-1)
                     labels = torch.from_numpy(
                         batch_labels[mask_train_src]).to(torch.long).to(predicts.device)
@@ -268,7 +268,10 @@ if __name__ == "__main__":
 
                 train_idx_data_loader_tqdm.set_description(
                     f'Epoch: {epoch + 1}, train for the {batch_idx + 1}-th batch, train loss: {loss.item()}')
-
+                    
+                if args.model_name in ['JODIE', 'DyRep', 'TGN']:
+                    # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
+                    model[0].memory_bank.detach_memory_bank()
             train_total_loss /= (batch_idx + 1)
             train_y_trues = torch.cat(train_y_trues, dim=0)
             train_y_predicts = torch.cat(train_y_predicts, dim=0)
