@@ -9,5 +9,6 @@ __pycache__
 *.ipynb
 env/
 *.sh
+old_data/
 data
 results
