@@ -393,7 +393,7 @@ def get_node_classification_em_args():
     parser.add_argument('--mmodel_name', type=str, default='mlp', help='name of the model of decoder',
                         choices=['mlp','mlp_bn'])    
     parser.add_argument('--gpu', type=int, default=7, help='number of gpu to use')
-    parser.add_argument('--save_pseudo_labels', type=int, default=1, help='Whether save the pseudo labels')   
+    parser.add_argument('--save_pseudo_labels', type=int, default=0, help='Whether save the pseudo labels')   
     #training settings:
     
     parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')
