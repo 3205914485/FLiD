@@ -146,9 +146,12 @@ if __name__ == "__main__":
                       pseudo_labels=pseudo_labels,
                       src_node_embeddings=src_node_embeddings,
                       dst_node_embeddings=dst_node_embeddings)
-        
+
+        if args.decoder == 2:
+            Mtrainer.model[0].load_state_dict(Mtrainer.model[1].state_dict())
+
         pseudo_labels = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels, \
+            data=data, pseudo_labels=pseudo_labels, mode=args.mode,\
             use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive, em_patience=args.em_patience)
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
@@ -194,7 +197,7 @@ if __name__ == "__main__":
                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
 
             pseudo_labels = update_pseudo_labels(
-                data=data, pseudo_labels=pseudo_labels, save_path=pseudo_labels_save_path, \
+                data=data, pseudo_labels=pseudo_labels, save_path=pseudo_labels_save_path, mode=args.mode,\
                 use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, em_patience=args.em_patience)
             
             if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
