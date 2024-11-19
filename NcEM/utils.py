@@ -70,9 +70,12 @@ def update_pseudo_labels(data, pseudo_labels, double_way_dataset, mode, use_tran
             pseudo_labels[1,mask_gt_i] = torch.from_numpy(
                 true_labels[1][mask_gt_i].astype('float32')).to(pseudo_labels.device)
         else:
-            mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
-            pseudo_labels[0,mask_gt] = torch.from_numpy(
-                true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
+            if mode == 'ps': 
+                mask_gt = torch.from_numpy((interact_times == labels_times) and train_mask).to(torch.bool)
+                pseudo_labels[0,mask_gt] = torch.from_numpy(
+                    true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
+            elif mode == 'gt':
+                pseudo_labels[0,:] = torch.from_numpy(true_labels.astype('float32')).to(pseudo_labels.device)
     else :
         if data['dataset_name'] in double_way_dataset:
             mask_gt_u = torch.from_numpy((interact_times == labels_times[0]) & train_mask).to(torch.bool) 

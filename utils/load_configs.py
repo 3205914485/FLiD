@@ -385,7 +385,7 @@ def get_node_classification_em_args():
     parser = argparse.ArgumentParser('Interface for the node classification task With The EM algorithm')
 
     # Configuration of the experiment
-    parser.add_argument('--prefix',type=str, default='1109_em_1d_TGAT_wikipedia_0.5', help='prefix of work')
+    parser.add_argument('--prefix',type=str, default='test', help='prefix of work')
     parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['wikipedia', 'mooc','bot', 'bot22','reddit','rt_wiki','taobao','yelp','dsub','dgraph'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--emodel_name', type=str, default='TGAT', help='name of the model of dyg backbone',
