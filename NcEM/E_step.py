@@ -242,7 +242,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
         # store train losses, trues and predicts
         train_total_loss, train_y_trues, train_y_predicts = 0.0, [], []
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
-        twhole_ps = 0
+        whole_ps = 0
         for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
             train_data_indices = train_data_indices.numpy()
 
