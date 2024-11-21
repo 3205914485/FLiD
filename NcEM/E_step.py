@@ -342,6 +342,8 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
             loss_gt = torch.tensor(0.0) if torch.isnan(loss_gt) else loss_gt
             loss_ps = loss_func(input=predicts_ps, target=labels_ps)
             loss_ps = torch.tensor(0.0) if torch.isnan(loss_ps) else loss_ps
+            if loss_gt == 0 and loss_ps == 0:
+                continue
             loss = loss_gt + (1-gt_weight)*loss_ps
             train_total_loss += loss.item()
             train_y_trues.append(labels[mask_ps | mask_gt])

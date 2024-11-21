@@ -112,7 +112,6 @@ if __name__ == "__main__":
 
         # EM data:
         pseudo_labels_save_path = f"processed_data/{args.dataset_name}/Direct/pseudo_labels/{args.emodel_name}/{args.seed}/"
-        pseudo_entropy = deque(maxlen=args.pseudo_entropy_ws)
 
         if args.dataset_name in double_way_datasets:
             pseudo_labels = torch.zeros(
@@ -145,9 +144,9 @@ if __name__ == "__main__":
         IterDirect_metric_dict, IterDirect_metric_dict= {}, {}
         best_test_all = [0.0,0.0]
         # update first to get the ground truth for pseudo labels
-        pseudo_labels, num_targets = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, save_path=pseudo_labels_save_path, \
-            double_way_dataset=double_way_datasets, use_transductive=args.use_transductive)
+        pseudo_labels = update_pseudo_labels(
+            data=data, pseudo_labels=pseudo_labels, mode=args.mode, \
+            use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive, em_patience=args.iter_patience)
 
         for k in range(args.num_iters):
             logger.info(f'Direct train Iter {k + 1} starts.\n')
@@ -158,13 +157,11 @@ if __name__ == "__main__":
 
             Direct_total_Loss, Direct_metrics, Direct_total_loss, Direct_metrics = \
                 Direct(args=args, gt_weight=gt_weight, data=data, logger=logger, Dirtrainer=Dirtrainer, 
-                pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy)
+                pseudo_labels=pseudo_labels)
 
-            pseudo_labels, num_targets = update_pseudo_labels(
-                data=data, pseudo_labels=pseudo_labels, pseudo_entropy=pseudo_entropy, threshold=args.pseudo_entropy_th, save_path=pseudo_labels_save_path, \
+            pseudo_labels = update_pseudo_labels(
+                data=data, pseudo_labels=pseudo_labels ,mode=args.mode, \
                 use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, em_patience=args.iter_patience)
-
-            logger.info(f"Iter: {k+1}, The sliding windows has {num_targets} sets entropy")
             
             if Dirtrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
                 log_and_save_metrics(

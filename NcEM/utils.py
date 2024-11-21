@@ -52,7 +52,7 @@ def update_pseudo_labels(data, pseudo_labels, double_way_dataset, mode, use_tran
         torch.save(pseudo_labels, os.path.join(save_path, f'raw_{iter_num}.pt'))  
 
     if use_ps_back:
-        mask_false = data['ps_batch_mask'] < em_patience - (iter_num+1) - 1
+        mask_false = data['ps_batch_mask'] < em_patience - (iter_num+1)
         pseudo_labels[mask_false.T] = -1
     else :
         pass

@@ -38,7 +38,7 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
 
     with torch.no_grad():
         # store evaluate losses, trues and predicts
-        evaluate_total_loss, evaluate_y_trues, evaluate_y_predicts, evaluate_y_trues_gt, evaluate_y_predicts_gt, entropy_through, whole_ps = 0.0, [], [], [], [], 0, 0
+        evaluate_total_loss, evaluate_y_trues, evaluate_y_predicts, evaluate_y_trues_gt, evaluate_y_predicts_gt = 0.0, [], [], [], []
         evaluate_idx_data_loader_tqdm = tqdm(
             evaluate_idx_data_loader, ncols=120)
         for batch_idx, evaluate_data_indices in enumerate(evaluate_idx_data_loader_tqdm):
@@ -139,12 +139,7 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
                 mask_all = (labels == labels).to('cpu')
 
             if use_ps_back:
-                whole_ps += sum(mask_all).float()
                 mask_all &= (labels != -1).to('cpu')
-                entropy_through += sum(mask_all).float()
-            else :
-                whole_ps = 1
-                entropy_through = 0
 
             loss = loss_func(input=predicts[mask_all], target=labels[mask_all])
 
@@ -168,10 +163,10 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
         evaluate_metrics_gt = get_node_classification_metrics_em(
             predicts=evaluate_y_predicts_gt, labels=evaluate_y_trues_gt)
 
-    return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt, entropy_through/whole_ps
+    return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt
 
 
-def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, pseudo_entropy):
+def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
 
     logger.info(f"Starting Direct-train\n")
     full_data = data['full_data']
@@ -214,7 +209,6 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
         # store train losses, trues and predicts
         train_total_loss, train_y_trues, train_y_predicts, train_y_trues_gt, train_y_predicts_gt = 0.0, [], [], [], []
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
-        train_entropy_through, whole_ps = 0 , 0
         for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
             train_data_indices = train_data_indices.numpy()
 
@@ -306,9 +300,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
                 mask_ps = ~mask_gt
 
             if args.use_ps_back:
-                whole_ps += sum(mask_ps).float()
                 mask_ps &= (labels != -1).to('cpu')
-                train_entropy_through += sum(mask_ps).float()
 
             predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
             predicts_ps, labels_ps = predicts[mask_ps], labels[mask_ps]
@@ -316,6 +308,8 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
             loss_gt = torch.tensor(0.0) if torch.isnan(loss_gt) else loss_gt
             loss_ps = loss_func(input=predicts_ps, target=labels_ps)
             loss_ps = torch.tensor(0.0) if torch.isnan(loss_ps) else loss_ps
+            if loss_gt == 0 and loss_ps == 0:
+                continue
             loss = loss_gt + (1-gt_weight)*loss_ps
             train_total_loss += loss.item()
             train_y_trues.append(labels[mask_ps])
@@ -333,8 +327,6 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
             if model_name in ['JODIE', 'DyRep', 'TGN']:
                 # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
                 model[0].memory_bank.detach_memory_bank()
-        if train_entropy_through != 0 and epoch == 0 :
-            logger.info(f'Train Entropy through: {train_entropy_through/whole_ps:.4f}')
         train_total_loss /= (batch_idx + 1)
         train_y_trues = torch.cat(train_y_trues, dim=0)
         train_y_predicts = torch.cat(train_y_predicts, dim=0)
@@ -353,7 +345,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
             logger.info(
                 f'Ground Truth train {metric_name}, {train_metrics_gt[metric_name]:.4f}')            
 
-        val_total_loss, val_metrics, val_metrics_gt, val_entropy_through = evaluate_model_node_classification_direct(model_name=model_name,
+        val_total_loss, val_metrics, val_metrics_gt = evaluate_model_node_classification_direct(model_name=model_name,
                                                                                                 model=model,
                                                                                                 dataset=args.dataset_name,
                                                                                                 neighbor_sampler=full_neighbor_sampler,
@@ -365,9 +357,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
                                                                                                 loss_func=loss_func,
                                                                                                 num_neighbors=args.num_neighbors,
                                                                                                 time_gap=args.time_gap)
-
-        if val_entropy_through != 0 and epoch == 0 :
-            logger.info(f'Valid Entropy through: {val_entropy_through:.4f}')    
+  
         logger.info(f'validate loss: {val_total_loss:.4f}')
         for metric_name in val_metrics.keys():
             logger.info(
@@ -382,7 +372,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
                 val_backup_memory_bank = model[0].memory_bank.backup_memory_bank(
                 )
 
-            test_total_loss, test_metrics, test_metrics_gt, test_entropy_through = evaluate_model_node_classification_direct(model_name=model_name,
+            test_total_loss, test_metrics, test_metrics_gt = evaluate_model_node_classification_direct(model_name=model_name,
                                                                                                        model=model,
                                                                                                        dataset=args.dataset_name,
                                                                                                        neighbor_sampler=full_neighbor_sampler,
@@ -398,9 +388,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
             if model_name in ['JODIE', 'DyRep', 'TGN']:
                 # reload validation memory bank for saving models
                 # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
-                model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
-            if test_entropy_through != 0 and epoch == 0 :
-                logger.info(f'Test Entropy through: {test_entropy_through:.4f}')    
+                model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)  
             logger.info(f'test loss: {test_total_loss:.4f}')
             for metric_name in test_metrics.keys():
                 logger.info(
@@ -437,7 +425,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
 
     # the saved best model of memory-based models cannot perform validation since the stored memory has been updated by validation data
     if model_name not in ['JODIE', 'DyRep', 'TGN']:
-        val_total_loss, val_metric, val_metrics_gt, val_entropy_through = evaluate_model_node_classification_direct(model_name=model_name,
+        val_total_loss, val_metric, val_metrics_gt = evaluate_model_node_classification_direct(model_name=model_name,
                                                                                                model=model,
                                                                                                dataset=args.dataset_name,
                                                                                                neighbor_sampler=full_neighbor_sampler,
@@ -450,7 +438,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
                                                                                                num_neighbors=args.num_neighbors,
                                                                                                time_gap=args.time_gap)
 
-    test_total_loss, test_metrics, test_metrics_gt, test_entropy_through = evaluate_model_node_classification_direct(model_name=model_name,
+    test_total_loss, test_metrics, test_metrics_gt = evaluate_model_node_classification_direct(model_name=model_name,
                                                                                                model=model,
                                                                                                dataset=args.dataset_name,
                                                                                                neighbor_sampler=full_neighbor_sampler,
@@ -466,7 +454,7 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
         logger.info(f'Best Test Ground Truth {metric_name}, {test_metrics_gt[metric_name]:.4f}')
 
     # generating the pseudo_labels
-    pseudo_labels_list, confidence_list, pseudo_entropy_list = [], [], []
+    pseudo_labels_list, confidence_list = [], []
     best_epoch = 0
     logger.info("Loop through all events to generate pseudo labels\n ")
 
@@ -528,8 +516,6 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
             if args.dataset_name in double_way_datasets:
                 one_hot_predicts = torch.stack([one_hot_predicts[:one_hot_predicts.shape[0]//2],one_hot_predicts[one_hot_predicts.shape[0]//2:]],dim=0)
                 pseudo_labels_list.append(one_hot_predicts.to(torch.long))
-                pseudo_entropy_batch = torch.stack([probabilities[:probabilities.shape[0]//2,0],probabilities[probabilities.shape[0]//2:,0]],dim=0)
-                confidence_list.append(pseudo_entropy_batch)
             else:
                 pseudo_labels_list.append(one_hot_predicts.to(torch.long))
                 confidence_list.append(probabilities[0])
@@ -539,5 +525,4 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, ps
     else:
         new_labels = torch.cat(pseudo_labels_list, dim=0).detach()
     pseudo_labels.copy_(new_labels)
-    pseudo_entropy.extend(pseudo_entropy_list[max(0, best_epoch-args.pseudo_entropy_ws): best_epoch+1])
     return val_total_loss, val_metrics_gt, test_total_loss, test_metrics_gt

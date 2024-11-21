@@ -487,6 +487,7 @@ def get_node_classification_direct_args():
                         choices=['mlp','mlp_bn'])    
     parser.add_argument('--gpu', type=int, default=3, help='number of gpu to use')
     parser.add_argument('--save_pseudo_labels', type=int, default=0, help='Whether save the pseudo labels')   
+    parser.add_argument('--mode', type=str, default='ps', choices=['ps','gt'], help='which label to use')  
     #training settings:
     
     parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')

@@ -45,22 +45,14 @@ def log_average_metrics(logger, metric_all_runs, prefix):
                     f'± {np.std(metric_values, ddof=1):.4f}')
 
 
-def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, double_way_dataset, use_transductive=0, save=False, save_path=0, iter_num=-1,use_ps_back=0,em_patience=-1):
+def update_pseudo_labels(data, pseudo_labels, double_way_dataset, mode, use_transductive=0, save=False, save_path=0, iter_num=-1,use_ps_back=0,em_patience=-1):
 
     if save:
         os.makedirs(save_path, exist_ok=True)  
         torch.save(pseudo_labels, os.path.join(save_path, f'raw_{iter_num}.pt'))  
 
-    pseudo_entropy_list = list(pseudo_entropy)
-    num_targets = len(pseudo_entropy_list)
-
-    # if use_pseudo_entropy:
-    #     pseudo_entropy_list = [pseudo_confidence - 0.5 for pseudo_confidence in pseudo_entropy_list]
-    #     pseudo_entropy_score = torch.abs(torch.sum(torch.stack(pseudo_entropy_list),dim=0))
-    #     mask_entropy = pseudo_entropy_score > (threshold - 0.5) * num_targets
-    #     pseudo_labels[~mask_entropy] = -1
     if use_ps_back:
-        mask_false = data['ps_batch_mask'] < em_patience - (iter_num+1) - 1
+        mask_false = data['ps_batch_mask'] < em_patience - (iter_num+1)
         pseudo_labels[mask_false.T] = -1
     else :
         pass
@@ -78,9 +70,12 @@ def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, double_
             pseudo_labels[1,mask_gt_i] = torch.from_numpy(
                 true_labels[1][mask_gt_i].astype('float32')).to(pseudo_labels.device)
         else:
-            mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
-            pseudo_labels[0,mask_gt] = torch.from_numpy(
-                true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
+            if mode == 'ps': 
+                mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
+                pseudo_labels[0,mask_gt] = torch.from_numpy(
+                    true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
+            elif mode == 'gt':
+                pseudo_labels[0,:] = torch.from_numpy(true_labels.astype('float32')).to(pseudo_labels.device)
     else :
         if data['dataset_name'] in double_way_dataset:
             mask_gt_u = torch.from_numpy((interact_times == labels_times[0]) & train_mask).to(torch.bool) 
@@ -90,11 +85,13 @@ def update_pseudo_labels(data, pseudo_labels, pseudo_entropy, threshold, double_
             pseudo_labels[1,mask_gt_i] = torch.from_numpy(
                 true_labels[1][mask_gt_i].astype('float32')).to(pseudo_labels.device)
         else:
-            mask_gt = torch.from_numpy((interact_times == labels_times) and train_mask).to(torch.bool)
-            pseudo_labels[0,mask_gt] = torch.from_numpy(
-                true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
-
+            if mode == 'ps': 
+                mask_gt = torch.from_numpy((interact_times == labels_times) & train_mask).to(torch.bool)
+                pseudo_labels[0,mask_gt] = torch.from_numpy(
+                    true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
+            elif mode == 'gt':
+                pseudo_labels[0,:] = torch.from_numpy(true_labels.astype('float32')).to(pseudo_labels.device)
     if save:
         torch.save(pseudo_labels, os.path.join(save_path, f'updated_{iter_num}.pt'))  
 
-    return pseudo_labels, num_targets
+    return pseudo_labels

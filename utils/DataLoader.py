@@ -615,7 +615,7 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
                 
                 effective_occurrences = total_occurrences - 1
                 if effective_occurrences == occurrence_tracker[point]:
-                    ps_batch_mask[index, j] = -1
+                    ps_batch_mask[index, j] = em_patience
                     continue
                 if effective_occurrences < em_patience:
                     batch_sequence = list(range(em_patience-effective_occurrences, em_patience))
@@ -649,7 +649,7 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
             
             effective_occurrences = total_occurrences - 1
             if effective_occurrences == occurrence_tracker[point]:
-                ps_batch_mask[index] = -1
+                ps_batch_mask[index] = em_patience
                 continue
             if effective_occurrences < em_patience:
                 batch_sequence = list(range(em_patience-effective_occurrences, em_patience))
