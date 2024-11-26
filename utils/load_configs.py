@@ -430,6 +430,7 @@ def get_node_classification_em_args():
     parser.add_argument('--pseudo_entropy_th', type=float, default=0.8, help='Pseudo_entropy threshold')
     parser.add_argument('--use_unified', type=int, default=0, help='Whether use the unifed EM train')
     parser.add_argument('--use_transductive', type=int, default=0, help='Whether use the transductive training for E Step') 
+    parser.add_argument('--use_inductive', type=int, default=0, help='Whether use the inductive training for E Step') 
     parser.add_argument('--decoder', type=int, default=1, help='num_decoders for training')
     parser.add_argument('--gt_weight', type=float, default=0.9, help='gt_weight to make the gt consider better')
     parser.add_argument('--em_patience', type=int, default=5, help='patience specific for EM iters loop')    

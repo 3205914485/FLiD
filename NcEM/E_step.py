@@ -199,6 +199,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
     train_idx_data_loader = data["train_idx_data_loader"]
     val_idx_data_loader = data["val_idx_data_loader"]
     test_idx_data_loader = data["test_idx_data_loader"]
+    train_nodes = data['train_nodes']
 
     dynamic_backbone = Etrainer.model
     if args.decoder == 1:
@@ -314,7 +315,9 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                 else:
                     mask_nodes_src = torch.ones_like(torch.from_numpy(batch_gt[0]), dtype=torch.bool)
                     mask_nodes_dst = torch.ones_like(torch.from_numpy(batch_gt[1]), dtype=torch.bool)
-  
+                if args.use_inductive:
+                    mask_nodes_src &= torch.from_numpy(np.isin(batch_src_node_ids, train_nodes)).to(torch.bool)
+                    mask_nodes_dst &= torch.from_numpy(np.isin(batch_dst_node_ids, train_nodes)).to(torch.bool)           
                 mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
                 mask_gt_src = torch.from_numpy(
                     (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
@@ -332,7 +335,10 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                 mask_gt = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
                 mask_ps = ~mask_gt
-
+                if args.use_inductive:
+                    mask_nodes = torch.from_numpy(np.isin(batch_src_node_ids, train_nodes)).to(torch.bool)  
+                    mask_gt &= mask_nodes
+                    mask_ps &= mask_nodes
             if args.use_ps_back:
                 whole_ps += sum(mask_ps).float()
                 mask_ps &= (labels != -1).to('cpu')
