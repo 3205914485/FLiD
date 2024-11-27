@@ -850,4 +850,4 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
     new_dst_embeddings = torch.cat(dst_node_embeddings_list, dim=0)
     src_node_embeddings.copy_(new_src_embeddings)
     dst_node_embeddings.copy_(new_dst_embeddings)
-    return test_total_loss, test_metrics
+    return test_metrics_gt
