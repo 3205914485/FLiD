@@ -703,7 +703,9 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
             val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
             test_mask = node_interact_times > test_time
             train_nodes_mask = merged_node_interact_times <= val_time
+            test_nodes_mask = merged_node_interact_times > test_time
             train_nodes = merged_ids[train_nodes_mask & mask].astype(int)
+            test_nodes = merged_ids[test_nodes_mask & mask].astype(int)
             
         else :
             mask = node_interact_times == labels_time
@@ -712,8 +714,8 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
             train_mask = node_interact_times <= val_time
             val_mask = np.logical_and(node_interact_times <= test_time, node_interact_times > val_time)
             test_mask = node_interact_times > test_time
-            train_nodes_mask = node_interact_times <= val_time
-            train_nodes = src_node_ids[train_nodes_mask & mask].astype(int)    
+            train_nodes = src_node_ids[train_mask & mask].astype(int)    
+            test_nodes = src_node_ids[test_mask & mask].astype(int)
  
     else:
         # get the timestamp of validate and test set
@@ -725,6 +727,7 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
     val_offest = sum(train_mask)
     test_offest = val_offest+sum(val_mask)
     train_nodes = np.unique(train_nodes)
+    test_nodes = np.unique(test_nodes)
 
     if dataset_name in double_way_datasets:
         full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, edge_ids=edge_ids, 
@@ -759,4 +762,4 @@ def get_NcEM_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
     # print("The test dataset has {} interactions, involving {} different nodes".format(
     #     test_data.num_interactions, test_data.num_unique_nodes)) 
     
-    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, full_data.num_interactions, NODE_FEAT_DIM, val_offest, test_offest, train_nodes, num_classes, ps_batch_mask
+    return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, full_data.num_interactions, NODE_FEAT_DIM, val_offest, test_offest, train_nodes, test_nodes, num_classes, ps_batch_mask

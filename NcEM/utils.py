@@ -61,22 +61,7 @@ def update_pseudo_labels(data, pseudo_labels, double_way_dataset, mode, use_tran
     interact_times = data['full_data'].node_interact_times
     val_offest = data['val_offest']
     train_mask = list(range(pseudo_labels.shape[1])) < val_offest
-    if not use_transductive:
-        if data['dataset_name'] in double_way_dataset:
-            mask_gt_u = torch.from_numpy(interact_times == labels_times[0]).to(torch.bool) 
-            mask_gt_i = torch.from_numpy(interact_times == labels_times[1]).to(torch.bool)
-            pseudo_labels[0,mask_gt_u] = torch.from_numpy(
-                true_labels[0][mask_gt_u].astype('float32')).to(pseudo_labels.device)
-            pseudo_labels[1,mask_gt_i] = torch.from_numpy(
-                true_labels[1][mask_gt_i].astype('float32')).to(pseudo_labels.device)
-        else:
-            if mode == 'ps': 
-                mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
-                pseudo_labels[0,mask_gt] = torch.from_numpy(
-                    true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
-            elif mode == 'gt':
-                pseudo_labels[0,:] = torch.from_numpy(true_labels.astype('float32')).to(pseudo_labels.device)
-    else :
+    if use_transductive:
         if data['dataset_name'] in double_way_dataset:
             mask_gt_u = torch.from_numpy((interact_times == labels_times[0]) & train_mask).to(torch.bool) 
             mask_gt_i = torch.from_numpy((interact_times == labels_times[1]) & train_mask).to(torch.bool)
@@ -87,6 +72,21 @@ def update_pseudo_labels(data, pseudo_labels, double_way_dataset, mode, use_tran
         else:
             if mode == 'ps': 
                 mask_gt = torch.from_numpy((interact_times == labels_times) & train_mask).to(torch.bool)
+                pseudo_labels[0,mask_gt] = torch.from_numpy(
+                    true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
+            elif mode == 'gt':
+                pseudo_labels[0,:] = torch.from_numpy(true_labels.astype('float32')).to(pseudo_labels.device)
+    else :
+        if data['dataset_name'] in double_way_dataset:
+            mask_gt_u = torch.from_numpy(interact_times == labels_times[0]).to(torch.bool) 
+            mask_gt_i = torch.from_numpy(interact_times == labels_times[1]).to(torch.bool)
+            pseudo_labels[0,mask_gt_u] = torch.from_numpy(
+                true_labels[0][mask_gt_u].astype('float32')).to(pseudo_labels.device)
+            pseudo_labels[1,mask_gt_i] = torch.from_numpy(
+                true_labels[1][mask_gt_i].astype('float32')).to(pseudo_labels.device)
+        else:
+            if mode == 'ps': 
+                mask_gt = torch.from_numpy(interact_times == labels_times).to(torch.bool)
                 pseudo_labels[0,mask_gt] = torch.from_numpy(
                     true_labels[mask_gt].astype('float32')).to(pseudo_labels.device)
             elif mode == 'gt':

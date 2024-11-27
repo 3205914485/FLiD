@@ -37,7 +37,7 @@ if __name__ == "__main__":
     args = get_node_classification_em_args()
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, \
-        num_node_features, val_offest, test_offest, train_nodes, num_classes, ps_batch_mask = \
+        num_node_features, val_offest, test_offest, train_nodes, test_nodes, num_classes, ps_batch_mask = \
         get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt, em_patience=args.em_patience)
     args.num_classes = num_classes
@@ -65,6 +65,7 @@ if __name__ == "__main__":
         "val_offest": val_offest,
         "test_data": test_data,
         "test_offest": test_offest,
+        "test_nodes": test_nodes,
         "full_neighbor_sampler": full_neighbor_sampler,
         "full_idx_data_loader": full_idx_data_loader,
         "train_idx_data_loader": train_idx_data_loader,
