@@ -769,6 +769,16 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
         # test:
         
         model.eval()
+        if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
+            # training process, set the neighbor sampler
+            model[0].set_neighbor_sampler(full_neighbor_sampler)
+        if model_name in ["M"]:
+            model[0].set_neighbor_sampler(full_neighbor_sampler)
+            # model[0].message_function.resetparameters()
+        if model_name in ['JODIE', 'DyRep', 'TGN']:
+            # reinitialize memory of memory-based models at the start of each epoch
+            model[0].memory_bank.__init_memory_bank__()
+            
         full_idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
         for batch_idx, full_data_indices in enumerate(full_idx_data_loader_tqdm):
             full_data_indices = full_data_indices.numpy()
@@ -897,7 +907,7 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
     if model_name in ['JODIE', 'DyRep', 'TGN']:
         model[0].memory_bank.__init_memory_bank__()
 
-    full_idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
+    full_idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)   
     for batch_idx, full_data_indices in enumerate(full_idx_data_loader_tqdm):
         full_data_indices = full_data_indices.numpy()
         if args.dataset_name in double_way_datasets:
