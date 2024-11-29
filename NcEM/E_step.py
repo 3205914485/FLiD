@@ -743,8 +743,6 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
             train_total_loss += loss.item()
             train_y_trues.append(labels[mask_ps | mask_gt])
             train_y_predicts.append(predicts[mask_ps | mask_gt])
-            test_y_trues_gt.append(batch_gt_cated[mask_gt_test])
-            test_y_predicts_gt.append(predicts[mask_gt_test])
             optimizer.zero_grad()
             loss.backward()
 
@@ -767,15 +765,113 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
         for metric_name in train_metrics.keys():
             logger.info(
                 f'train {metric_name}, {train_metrics[metric_name]:.4f}')
+
+        # test:
+        
         model.eval()
+        full_idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
+        for batch_idx, full_data_indices in enumerate(full_idx_data_loader_tqdm):
+            full_data_indices = full_data_indices.numpy()
+            if args.dataset_name in double_way_datasets:
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
+                    full_data.src_node_ids[full_data_indices], full_data.dst_node_ids[full_data_indices], full_data.node_interact_times[full_data_indices], \
+                    full_data.edge_ids[full_data_indices], [pseudo_labels[0][full_data_indices], pseudo_labels[1][full_data_indices]], \
+                    [full_data.labels[0][full_data_indices], full_data.labels[1][full_data_indices]], \
+                    [full_data.labels_time[0][full_data_indices],
+                        full_data.labels_time[1][full_data_indices]]
+            else:
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
+                    full_data.src_node_ids[full_data_indices], full_data.dst_node_ids[full_data_indices], full_data.node_interact_times[full_data_indices], \
+                    full_data.edge_ids[full_data_indices], pseudo_labels[0][full_data_indices], \
+                    full_data.labels[full_data_indices],full_data.labels_time[full_data_indices]
+
+            with torch.no_grad():
+                if model_name in ['TGAT', 'CAWN', 'TCL']:
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times,
+                                                                        num_neighbors=args.num_neighbors)
+                elif model_name in ['JODIE', 'DyRep', 'TGN']:
+                    # get temporal embedding of source and destination nodes
+                    # two Tensors, with shape (batch_size, node_feat_dim)
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times,
+                                                                        edge_ids=batch_edge_ids,
+                                                                        edges_are_positive=True,
+                                                                        num_neighbors=args.num_neighbors)
+                elif model_name in ['GraphMixer']:
+                    # get temporal embedding of source and destination nodes
+                    # two Tensors, with shape (batch_size, node_feat_dim)
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times,
+                                                                        num_neighbors=args.num_neighbors,
+                                                                        time_gap=args.time_gap)
+                elif model_name in ['DyGFormer']:
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times)
+                else:
+                    raise ValueError(f"Wrong value for model_name {model_name}!")
+            if args.dataset_name in double_way_datasets:
+                predicts = model[1](x=torch.cat(
+                    [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
+                labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
+                    torch.long).to(predicts.device).squeeze(dim=-1)
+                batch_gt_cated = torch.cat([torch.from_numpy(batch_gt[0]), torch.from_numpy(batch_gt[1])], axis=0).to(
+                    torch.long).to(predicts.device).squeeze(dim=-1)
+                if args.dataset_name == 'dsub':
+                    mask_nodes_src = torch.from_numpy(
+                        np.isin(batch_gt[0], [0, 1])).to(torch.bool)
+                    mask_nodes_dst = torch.from_numpy(
+                        np.isin(batch_gt[1], [0, 1])).to(torch.bool)
+                else:
+                    mask_nodes_src = torch.ones_like(
+                        torch.from_numpy(batch_gt[0]), dtype=torch.bool)
+                    mask_nodes_dst = torch.ones_like(
+                        torch.from_numpy(batch_gt[1]), dtype=torch.bool)
+                mask_nodes_src_test = mask_nodes_src & torch.from_numpy(
+                    np.isin(batch_src_node_ids, test_nodes)).to(torch.bool)
+                mask_nodes_dst_test = mask_nodes_dst & torch.from_numpy(
+                    np.isin(batch_dst_node_ids, test_nodes)).to(torch.bool)
+                mask_nodes_test = torch.cat(
+                    [mask_nodes_src_test, mask_nodes_dst_test], dim=0).squeeze(dim=-1)                    
+                mask_gt_src = torch.from_numpy(
+                    (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
+                mask_gt_dst = torch.from_numpy(
+                    (batch_node_interact_times == batch_labels_times[1])).to(torch.bool)
+                mask_gt = torch.cat(
+                    [mask_gt_src, mask_gt_dst], dim=0).squeeze(dim=-1)
+                mask_gt_test = mask_gt & mask_nodes_test
+
+            else:
+                predicts = model[1](x=batch_src_node_embeddings)
+                labels = batch_labels.to(torch.long).to(
+                    predicts.device).squeeze(dim=-1)
+                batch_gt_cated = torch.from_numpy(batch_gt).to(torch.long).to(
+                    predicts.device).squeeze(dim=-1)
+                mask_gt = torch.from_numpy(
+                    batch_node_interact_times == batch_labels_times).to(torch.bool)
+                mask_nodes_test = torch.from_numpy(
+                    np.isin(batch_src_node_ids, test_nodes)).to(torch.bool)
+                mask_gt_test = mask_gt & mask_nodes_test
+
+            test_y_trues_gt.append(batch_gt_cated[mask_gt_test])
+            test_y_predicts_gt.append(predicts[mask_gt_test])
         test_y_trues_gt = torch.cat(test_y_trues_gt, dim=0)
         test_y_predicts_gt = torch.cat(test_y_predicts_gt, dim=0)
         test_metrics_gt = get_node_classification_metrics_em(
             predicts=test_y_predicts_gt, labels=test_y_trues_gt)
-
+    
         for metric_name in test_metrics_gt.keys():
             logger.info(
                 f'Groun Truth test {metric_name}, {test_metrics_gt[metric_name]:.4f}')
+            
         # select the best model based on all the validate metrics
         test_metrics_gt_indicator = []
         for metric_name in test_metrics_gt.keys():
@@ -793,7 +889,6 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
             break
     # load the best model
     early_stopping.load_checkpoint(model)
-
     # generating the embeddings
         # Loop through events and generate embeddings
     src_node_embeddings_list, dst_node_embeddings_list = [], []
@@ -802,12 +897,15 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
     if model_name in ['JODIE', 'DyRep', 'TGN']:
         model[0].memory_bank.__init_memory_bank__()
 
-    idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
-    for batch_idx, data_indices in enumerate(idx_data_loader_tqdm):
-        data_indices = data_indices.numpy()
-        batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids = \
-            full_data.src_node_ids[data_indices], full_data.dst_node_ids[data_indices], full_data.node_interact_times[data_indices], \
-            full_data.edge_ids[data_indices]
+    full_idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
+    for batch_idx, full_data_indices in enumerate(full_idx_data_loader_tqdm):
+        full_data_indices = full_data_indices.numpy()
+        if args.dataset_name in double_way_datasets:
+            batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times = \
+                full_data.src_node_ids[full_data_indices], full_data.dst_node_ids[full_data_indices], full_data.node_interact_times[full_data_indices]
+        else:
+            batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times = \
+                full_data.src_node_ids[full_data_indices], full_data.dst_node_ids[full_data_indices], full_data.node_interact_times[full_data_indices]
 
         with torch.no_grad():
             if model_name in ['TGAT', 'CAWN', 'TCL']:
@@ -845,7 +943,6 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
         src_node_embeddings_list.append(batch_src_node_embeddings)
         dst_node_embeddings_list.append(batch_dst_node_embeddings)
 
-    # Concatenate all embeddings
     new_src_embeddings = torch.cat(src_node_embeddings_list, dim=0)
     new_dst_embeddings = torch.cat(dst_node_embeddings_list, dim=0)
     src_node_embeddings.copy_(new_src_embeddings)

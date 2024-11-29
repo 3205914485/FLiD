@@ -8,9 +8,9 @@
     - **有时间标签的 动态图结构数据集** 动态标签的采集困难与质量问题（我们采用半监督建模手段）
 
 Based on the
-    - timestamp
-    - dynamic-transfer
-    - dynamic-labels
+- timestamp
+- dynamic-transfer
+- dynamic-labelsv
 
 We list:
 - 1.  Static-Graph                      (000)

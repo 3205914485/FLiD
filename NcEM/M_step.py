@@ -137,6 +137,19 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
     early_stopping = EarlyStopping(patience=patience, save_model_folder=save_model_folder,
                                    save_model_name=save_model_name, logger=logger, model_name=model_name)
     loss_func = Mtrainer.criterion
+    test_total_loss, test_metrics = evaluate_model_node_classification_withembeddings(model=model,
+                                                                                        dataset=args.dataset_name,
+                                                                                        src_node_embeddings=src_node_embeddings,
+                                                                                        dst_node_embeddings=dst_node_embeddings,
+                                                                                        evaluate_idx_data_loader=test_idx_data_loader,
+                                                                                        evaluate_data=test_data,
+                                                                                        loss_func=loss_func)
+
+    logger.info(f'test loss: {test_total_loss:.4f}')
+
+    for metric_name in test_metrics.keys():
+        logger.info(
+            f'test {metric_name}: {test_metrics[metric_name]:.4f}')
     if train:
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
         best_metrics, best_epoch = {'roc_auc': 0.0, 'accuracy': 0.0}, 0

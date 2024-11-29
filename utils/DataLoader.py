@@ -373,7 +373,7 @@ def get_node_classification_data(dataset_name: str, val_ratio: float, test_ratio
         
     return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes, num_classes
 
-def get_node_classification_gt_data(dataset_name: str, val_ratio: float, test_ratio: float,is_pretrained:bool=False, new_spilt: bool=True):
+def get_node_classification_gt_data(dataset_name: str, val_ratio: float, test_ratio: float,is_pretrained:bool=False, new_spilt: bool=True, use_ps: bool=False):
     """
     generate data for node classification task
     :param dataset_name: str, dataset name
@@ -434,7 +434,10 @@ def get_node_classification_gt_data(dataset_name: str, val_ratio: float, test_ra
         labels=[label1,label2]
         labels_time = [labels_time1,labels_time2]
     else:
-        labels=graph_df.label.values
+        if use_ps:
+            labels=graph_df.label_ps.values
+        else :
+            labels=graph_df.label.values 
         labels_time = graph_df.last_ts.values
     # The setting of seed follows previous works
     random.seed(2020)

@@ -273,6 +273,8 @@ def get_node_classification_args():
                         choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer','M'])
     parser.add_argument('--gpu', type=int, default=3, help='number of gpu to use')
     parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')
+    
+    parser.add_argument('--use_ps', type=int, default=0, help='whether use the pseudo labels as labels')       
     parser.add_argument('--sample_neighbor_strategy', type=str, default='recent', choices=['uniform', 'recent', 'time_interval_aware'], help='how to sample historical neighbors')
     parser.add_argument('--time_scaling_factor', default=1e-6, type=float, help='the hyperparameter that controls the sampling preference with time interval, '
                         'a large time_scaling_factor tends to sample more on recent links, 0.0 corresponds to uniform sampling, '
@@ -432,12 +434,12 @@ def get_node_classification_em_args():
     parser.add_argument('--use_transductive', type=int, default=0, help='Whether use the transductive training for E Step') 
     parser.add_argument('--use_inductive', type=int, default=0, help='Whether use the inductive training for E Step') 
     parser.add_argument('--decoder', type=int, default=1, help='num_decoders for training')
-    parser.add_argument('--gt_weight', type=float, default=0.9, help='gt_weight to make the gt consider better')
+    parser.add_argument('--gt_weight', type=float, default=0.5, help='gt_weight to make the gt consider better')
     parser.add_argument('--em_patience', type=int, default=5, help='patience specific for EM iters loop')    
-    parser.add_argument('--patience', type=int, default=20, help='patience for early stopping')
+    parser.add_argument('--patience', type=int, default=15, help='patience for early stopping')
     parser.add_argument('--num_em_iters', type=int, default=30, help='number of EM iters')
-    parser.add_argument('--num_epochs_e_step', type=int, default=1, help='number of epochs of E step')
-    parser.add_argument('--num_epochs_m_step', type=int, default=1, help='number of epochs of M step')
+    parser.add_argument('--num_epochs_e_step', type=int, default=5, help='number of epochs of E step')
+    parser.add_argument('--num_epochs_m_step', type=int, default=5, help='number of epochs of M step')
 
 
     # Model specific settings:
