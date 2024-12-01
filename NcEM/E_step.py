@@ -910,12 +910,9 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
     full_idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)   
     for batch_idx, full_data_indices in enumerate(full_idx_data_loader_tqdm):
         full_data_indices = full_data_indices.numpy()
-        if args.dataset_name in double_way_datasets:
-            batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times = \
-                full_data.src_node_ids[full_data_indices], full_data.dst_node_ids[full_data_indices], full_data.node_interact_times[full_data_indices]
-        else:
-            batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times = \
-                full_data.src_node_ids[full_data_indices], full_data.dst_node_ids[full_data_indices], full_data.node_interact_times[full_data_indices]
+        batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids = \
+            full_data.src_node_ids[full_data_indices], full_data.dst_node_ids[full_data_indices], full_data.node_interact_times[full_data_indices], \
+            full_data.edge_ids[full_data_indices]
 
         with torch.no_grad():
             if model_name in ['TGAT', 'CAWN', 'TCL']:
