@@ -152,7 +152,7 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
             else:
                 whole_ps = 1
 
-            loss = loss_func(input=predicts[mask_all], target=labels[mask_all])
+            loss = loss_func(input=predicts[mask_all], target=labels[mask_all]).mean()
 
             evaluate_total_loss += loss.item()
 
@@ -177,7 +177,7 @@ def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module,
     return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt
 
 
-def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings):
+def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings, iter_num):
 
     logger.info(f"Starting E-step\n")
     full_data = data['full_data']
@@ -192,6 +192,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
     val_idx_data_loader = data["val_idx_data_loader"]
     test_idx_data_loader = data["test_idx_data_loader"]
     train_nodes = data['train_nodes']
+    ps_batch_mask = data['ps_batch_mask']
 
     dynamic_backbone = Etrainer.model
     if args.decoder == 1:
@@ -241,17 +242,16 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
             train_data_indices = train_data_indices.numpy()
 
             if args.dataset_name in double_way_datasets:
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times, batch_ps_mask = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
                     train_data.edge_ids[train_data_indices], [pseudo_labels[0][train_data_indices], pseudo_labels[1][train_data_indices]], \
                     [train_data.labels[0][train_data_indices], train_data.labels[1][train_data_indices]], \
-                    [train_data.labels_time[0][train_data_indices],
-                        train_data.labels_time[1][train_data_indices]]
+                    [train_data.labels_time[0][train_data_indices],train_data.labels_time[1][train_data_indices]], \
+                    [ps_batch_mask[0][train_data_indices], ps_batch_mask[1][train_data_indices]]
             else:
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times, batch_ps_mask = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
-                    train_data.edge_ids[train_data_indices], pseudo_labels[0][
-                        train_data_indices], train_data.labels_time[train_data_indices]
+                    train_data.edge_ids[train_data_indices], pseudo_labels[0][train_data_indices], train_data.labels_time[train_data_indices], ps_batch_mask[train_data_indices]
 
             if model_name in ['TGAT', 'CAWN', 'TCL']:
                 # get temporal embedding of source and destination nodes
@@ -304,6 +304,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
+                batch_ps_mask = args.em_patience - torch.cat(torch.from_numpy(batch_ps_mask), dim=0)
                 if args.dataset_name == 'dsub':
                     mask_nodes_src = torch.from_numpy(
                         np.isin(batch_gt[0], [0, 1])).to(torch.bool)
@@ -334,6 +335,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                 predicts = model[1](x=batch_src_node_embeddings)
                 labels = batch_labels.to(torch.long).to(
                     predicts.device).squeeze(dim=-1)
+                batch_ps_mask = args.em_patience - torch.from_numpy(batch_ps_mask)
                 mask_gt = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
                 mask_ps = ~mask_gt
@@ -347,9 +349,16 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                 mask_ps &= (labels != -1).to('cpu')
             predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
             predicts_ps, labels_ps = predicts[mask_ps], labels[mask_ps]
-            loss_gt = loss_func(input=predicts_gt, target=labels_gt)
+            loss_gt = loss_func(input=predicts_gt, target=labels_gt).mean()
             loss_gt = torch.tensor(0.0) if torch.isnan(loss_gt) else loss_gt
-            loss_ps = loss_func(input=predicts_ps, target=labels_ps)
+            if args.use_ps_back:
+                loss_ps = loss_func(input=predicts_ps, target=labels_ps) 
+                loss_ps_weight = torch.exp(- args.alpha * (batch_ps_mask[mask_ps] - iter_num))
+                loss_ps_weight = torch.where(batch_ps_mask[mask_ps] > iter_num, loss_ps_weight, 1)
+                loss_ps *= loss_ps_weight.squeeze(dim=-1).to(loss_ps.device)
+                loss_ps = loss_ps.mean()
+            else:
+                loss_ps = loss_func(input=predicts_ps, target=labels_ps).mean()
             loss_ps = torch.tensor(0.0) if torch.isnan(loss_ps) else loss_ps
             if loss_gt == 0 and loss_ps == 0:
                 continue
@@ -733,9 +742,9 @@ def e_step_t(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_label
                 mask_ps &= (labels != -1).to('cpu')
             predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
             predicts_ps, labels_ps = predicts[mask_ps], labels[mask_ps]
-            loss_gt = loss_func(input=predicts_gt, target=labels_gt)
+            loss_gt = loss_func(input=predicts_gt, target=labels_gt).mean()
             loss_gt = torch.tensor(0.0) if torch.isnan(loss_gt) else loss_gt
-            loss_ps = loss_func(input=predicts_ps, target=labels_ps)
+            loss_ps = loss_func(input=predicts_ps, target=labels_ps).mean()
             loss_ps = torch.tensor(0.0) if torch.isnan(loss_ps) else loss_ps
             if loss_gt == 0 and loss_ps == 0:
                 continue

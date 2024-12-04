@@ -92,7 +92,7 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
 
             if filtered_predicts.size(0) > 0:
                 loss = loss_func(input=filtered_predicts,
-                                 target=filtered_labels)
+                                 target=filtered_labels).mean()
                 loss_value = loss.item()
                 batch_count += 1
             else:
@@ -202,7 +202,7 @@ def train_model_node_classification_withembeddings(args, Etrainer, Mtrainer, dat
 
                 if filtered_predicts.size(0) > 0:
                     loss = loss_func(input=filtered_predicts,
-                                     target=filtered_labels)
+                                     target=filtered_labels).mean()
 
                     train_total_loss += loss.item()
 

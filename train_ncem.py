@@ -191,7 +191,7 @@ if __name__ == "__main__":
             else:
                 Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
                     e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
+                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, iter_num=k)
 
             Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
                 m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
