@@ -247,7 +247,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                     train_data.edge_ids[train_data_indices], [pseudo_labels[0][train_data_indices], pseudo_labels[1][train_data_indices]], \
                     [train_data.labels[0][train_data_indices], train_data.labels[1][train_data_indices]], \
                     [train_data.labels_time[0][train_data_indices],train_data.labels_time[1][train_data_indices]], \
-                    [ps_batch_mask[0][train_data_indices], ps_batch_mask[1][train_data_indices]]
+                    [torch.from_numpy(ps_batch_mask[train_data_indices][0]), torch.from_numpy(ps_batch_mask[train_data_indices][1])]
             else:
                 batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times, batch_ps_mask = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
@@ -304,7 +304,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
-                batch_ps_mask = args.em_patience - torch.cat(torch.from_numpy(batch_ps_mask), dim=0)
+                batch_ps_mask = args.em_patience - torch.cat(batch_ps_mask, dim=0)
                 if args.dataset_name == 'dsub':
                     mask_nodes_src = torch.from_numpy(
                         np.isin(batch_gt[0], [0, 1])).to(torch.bool)

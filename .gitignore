@@ -12,4 +12,8 @@ env/
 old_data/
 data
 results
+<<<<<<< HEAD
 run_ps_alpha/
+=======
+run_ps_alpha/
+>>>>>>> 2d28c15127a07711320a56ac74134bee6f730dbc

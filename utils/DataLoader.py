@@ -128,10 +128,12 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
     edge_ids = graph_df.idx.values.astype(np.longlong)
     if dataset_name=='bot' or dataset_name== 'bot22' or dataset_name=='dsub' or dataset_name=='dgraph' or dataset_name =='yelp':
         labels = graph_df.label_u.values
+        labels_time = graph_df.last_u_ts.values
     else :
         labels = graph_df.label.values
+        labels_time = graph_df.last_ts.values
 
-    labels_time = graph_df.last_ts.values
+    
     # labels have two lists, for this task we do not use it thus we only take one
 
     full_data = Data(src_node_ids=src_node_ids, dst_node_ids=dst_node_ids, node_interact_times=node_interact_times, 
