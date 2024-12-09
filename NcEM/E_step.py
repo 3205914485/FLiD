@@ -247,7 +247,7 @@ def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels,
                     train_data.edge_ids[train_data_indices], [pseudo_labels[0][train_data_indices], pseudo_labels[1][train_data_indices]], \
                     [train_data.labels[0][train_data_indices], train_data.labels[1][train_data_indices]], \
                     [train_data.labels_time[0][train_data_indices],train_data.labels_time[1][train_data_indices]], \
-                    [torch.from_numpy(ps_batch_mask[train_data_indices][0]), torch.from_numpy(ps_batch_mask[train_data_indices][1])]
+                    [torch.from_numpy(ps_batch_mask[train_data_indices,0]), torch.from_numpy(ps_batch_mask[train_data_indices,1])]
             else:
                 batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times, batch_ps_mask = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
