@@ -68,46 +68,46 @@ pip install -r requirements.txt
 
 ## 🛠 Usage
 
--  数据预处理
+- **Data Preprocessing**
 
-    使用 `preprocess` 处理数据。
+    Use the `preprocess` script to process the data.
 
-- Step 1: Warmup
+- **Step 1: Warmup**
 
-    1. 配置以下参数进行 warmup 训练：
-    - `model_name`：选择模型（如 `TGAT`）
-    - `gpu`：指定使用的 GPU（如 `5`）
-    - `dataset`：选择数据集（如 `reddit` 或 `wikipedia`）
-    - `threshold`：伪标签阈值（如 `0.5`）
-    - `gt_weight`：伪标签的权重（如 `0.9`）
+    1. Configure the following parameters for the warmup training:
+    - `model_name`: Choose the model (e.g., `TGAT`)
+    - `gpu`: Specify the GPU to use (e.g., `5`)
+    - `dataset`: Choose the dataset (e.g., `reddit` or `wikipedia`)
+    - `threshold`: Pseudo-label threshold (e.g., `0.5`)
+    - `gt_weight`: Pseudo-label weight (e.g., `0.9`)
 
-    运行 warmup 阶段：
+    Run the warmup step:
 
     ```bash
     bash warmup.sh
     ```
 
-- Step 2: 训练
+- **Step 2: Training**
 
-    1. 配置以下参数进行训练：
-    - `method`：选择训练方法（如 `PTCL`, `SEM`, `NPL`）
-    - `dataset`：选择数据集（如 `reddit`, `wikipedia`, `oag`）
-    - `gt_weight`：伪标签的权重（如 `0.5`）
-    - `alphas`：设置不同的超参数（如 `0.1`）
-    - `gpus`：指定使用的 GPU（如 `[1]`）
-    - `max_tasks_per_gpu`：每个 GPU 最大任务数（如 `1`）
+    1. Configure the following parameters for training:
+    - `method`: Choose the training method (e.g., `PTCL`, `SEM`, `NPL`)
+    - `dataset`: Choose the dataset (e.g., `reddit`, `wikipedia`, `oag`)
+    - `gt_weight`: Pseudo-label weight (e.g., `0.5`)
+    - `alphas`: Set different hyperparameters (e.g., `0.1`)
+    - `gpus`: Specify the GPUs to use (e.g., `[1]`)
+    - `max_tasks_per_gpu`: Maximum tasks per GPU (e.g., `1`)
 
-    运行训练脚本：
+    Run the training script:
 
     ```bash
     bash train.sh
     ```
 
-- 结果
+- **Results**
 
-    - 训练过程中，`logs/` 目录将保存训练日志。
-    - 训练过程中，`results/` 目录将保存训练结果。
-    - 可以根据输出的 `AUC` 和 `ACC` 评估模型性能。
+    - During training, the `logs/` directory will save the training logs.
+    - The `results/` directory will store the training results.
+    - You can evaluate the model performance using the output `AUC` and `ACC`.
 
 ## 📊 Method Comparison
 
