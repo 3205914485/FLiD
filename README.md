@@ -22,7 +22,7 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     * SEM (Standard EM) 
     * PTCL-2D (PTCL with 2 Decoders) 
     * PTCL-2D
-  ![Methods](methods.png)
+  ![Methods](images/methods.png)
   * Support for below pseudo-labels enhancement methods:
     * Confidence Score Threshold (CST)
     * Entropy of Softmax Trajectory (EST) 
