@@ -29,7 +29,7 @@ cpu_num = 2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa 
 os.environ["MKL_NUM_THREADS"] = str(cpu_num)  # noqa
 torch.set_num_threads(cpu_num)
-double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
+double_way_datasets = ['bot','bot22','dgraph','dsub','yelp','oag','arxiv']
 if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     val_metric_all_runs, test_metric_all_runs = [], []
 
-    for run in range(args.num_runs):
+    for run in range(args.start_runs, args.end_runs):
 
         set_random_seed(seed=run)
 

@@ -39,15 +39,18 @@ def get_node_classification_metrics_em(predicts: torch.Tensor, labels: torch.Ten
     accuracy = accuracy_score(y_true=labels_np, y_pred=predicted_classes)
     
     # Calculate ROC AUC score for each class, then average
-    if len(np.unique(labels_np)) == predicts_np.shape[1]:
+    if len(np.unique(labels_np)) > 1:
         if predicts_np.shape[1] == 2:
             roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np[:, 1])
+            f1 = f1_score(labels_np, predicted_classes, average='binary')
         else:
             roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np, multi_class='ovr')
+            f1 = f1_score(y_true=labels_np, y_pred=predicted_classes, average='macro')
     else:
         roc_auc = 0.0
+        f1 = 0.0
 
-    return {'roc_auc': roc_auc, 'accuracy': accuracy}
+    return {'roc_auc': roc_auc, 'acc': accuracy}
     
 def get_node_classification_metrics(predicts: torch.Tensor, labels: torch.Tensor):
     """
@@ -63,17 +66,19 @@ def get_node_classification_metrics(predicts: torch.Tensor, labels: torch.Tensor
 
     # Get the predicted classes
     predicted_classes = np.argmax(predicts_np, axis=1)
-    
-    # Calculate accuracy
     accuracy = accuracy_score(y_true=labels_np, y_pred=predicted_classes)
+    # Calculate accuracy
     
     # Calculate ROC AUC score for each class, then average
     if len(np.unique(labels_np)) > 1:
         if predicts_np.shape[1] == 2:
             roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np[:, 1])
+            f1 = f1_score(labels_np, predicted_classes, average='binary')
         else:
             roc_auc = roc_auc_score(y_true=labels_np, y_score=predicts_np, multi_class='ovr')
+            f1 = f1_score(y_true=labels_np, y_pred=predicted_classes, average='macro')
     else:
         roc_auc = 0.0
+        f1 = 0.0
 
-    return {'roc_auc': roc_auc, 'accuracy': accuracy}
+    return {'roc_auc': roc_auc, 'acc': accuracy}

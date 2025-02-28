@@ -8,12 +8,12 @@ from models.DyGFormer import DyGFormer
 from models.modules import MLPClassifier, MLPClassifier_BN
 from utils.utils import convert_to_gpu
 from torch import nn
-from Direct.trainer import Trainer
+from PTCL.trainer import Trainer
 
 
-def Direct_init(args, node_raw_features, edge_raw_features, train_data, full_neighbor_sampler, logger):
+def NPL_init(args, node_raw_features, edge_raw_features, train_data, full_neighbor_sampler, logger):
     r"""
-        Initialize Direct Models
+        Initialize NPL Models
         Args:
             args: arguments for the model
             node_raw_features: node raw features
@@ -22,7 +22,7 @@ def Direct_init(args, node_raw_features, edge_raw_features, train_data, full_nei
             full_neighbor_sampler: neighbor sampler
             logger: logger
         Returns:
-            Dirtrainer: Direct trainer
+            Dirtrainer: NPL trainer
     """
     # create Emodel
     if args.emodel_name == 'TGAT':

@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     val_metric_all_runs, new_node_val_metric_all_runs, test_metric_all_runs, new_node_test_metric_all_runs = [], [], [], []
 
-    for run in range(args.num_runs):
+    for run in range(args.start_runs, args.end_runs):
 
         set_random_seed(seed=run)
 

@@ -6,20 +6,19 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from utils.utils import create_optimizer
 from utils.metrics import get_node_classification_metrics_em
-from utils.utils import  NeighborSampler
+from utils.utils import NeighborSampler
 from utils.DataLoader import Data
 from utils.EarlyStopping import EarlyStopping
 
-from Direct.trainer import Trainer
-
-double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
+from PTCL.trainer import Trainer
 
 
-def evaluate_model_node_classification_direct(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
-                                              evaluate_data: Data, loss_func: nn.Module, pseudo_labels: torch.tensor, num_neighbors: int = 20, time_gap: int = 2000, use_ps_back: bool = True):
+def evaluate_model_node_classification_E_step(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
+                                              evaluate_data: Data, loss_func: nn.Module, pseudo_labels: torch.tensor, num_neighbors: int = 20, time_gap: int = 2000, ps_filter: str = 'none', double_way_datasets: list = []):
     r"""
-    evaluate models on the node classification task directly
+    evaluate models on the node classification task with E step
     :param model_name: str, name of the model
     :param model: nn.Module, the model to be evaluated
     :param neighbor_sampler: NeighborSampler, neighbor sampler
@@ -50,7 +49,7 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
                     [pseudo_labels[0][evaluate_data_indices+offest], pseudo_labels[1][evaluate_data_indices+offest]], \
                     [evaluate_data.labels[0][evaluate_data_indices], evaluate_data.labels[1][evaluate_data_indices]], \
                     [evaluate_data.labels_time[0][evaluate_data_indices], evaluate_data.labels_time[1][evaluate_data_indices]]
-                        
+
             else:
                 batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
                     evaluate_data.src_node_ids[evaluate_data_indices],  evaluate_data.dst_node_ids[evaluate_data_indices], \
@@ -109,16 +108,15 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0)).squeeze(dim=-1)
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
-                labels_gt = torch.cat([torch.from_numpy(batch_gt[0]), torch.from_numpy(batch_gt[1])], axis=0).to(
-                    torch.long).to(predicts.device).squeeze(dim=-1) 
-                if dataset == 'dsub': 
-                    mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
-                    mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                labels_gt = torch.cat([torch.from_numpy(batch_gt[0]), torch.from_numpy(batch_gt[1])], axis=0).to(torch.long).to(predicts.device).squeeze(dim=-1)
+                if dataset == 'dsub':
+                    mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0], [0, 1])).to(torch.bool)
+                    mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1], [0, 1])).to(torch.bool)
                 else:
                     mask_nodes_src = torch.ones_like(torch.from_numpy(batch_gt[0]), dtype=torch.bool)
                     mask_nodes_dst = torch.ones_like(torch.from_numpy(batch_gt[1]), dtype=torch.bool)
-  
-                mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
+
+                mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst], dim=0).squeeze(dim=-1)
 
                 mask_gt_src = torch.from_numpy(
                     (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
@@ -133,15 +131,15 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
                 labels = batch_labels.to(torch.long).to(
                     predicts.device).squeeze(dim=-1)
                 labels_gt = torch.from_numpy(batch_gt).to(torch.long).to(
-                    predicts.device).squeeze(dim=-1) 
+                    predicts.device).squeeze(dim=-1)
                 mask_gt = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
                 mask_all = (labels == labels).to('cpu')
 
-            if use_ps_back:
+            if ps_filter !='none':
                 mask_all &= (labels != -1).to('cpu')
 
-            loss = loss_func(input=predicts[mask_all], target=labels[mask_all])
+            loss = loss_func(input=predicts[mask_all], target=labels[mask_all]).mean()
 
             evaluate_total_loss += loss.item()
 
@@ -166,9 +164,10 @@ def evaluate_model_node_classification_direct(model_name: str, model: nn.Module,
     return evaluate_total_loss, evaluate_metrics, evaluate_metrics_gt
 
 
-def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
+def e_step(Etrainer: Trainer, Mtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger, src_node_embeddings, dst_node_embeddings, iter_num):
 
-    logger.info(f"Starting Direct-train\n")
+    double_way_datasets = args.double_way_datasets
+    logger.info(f"Starting E-step\n")
     full_data = data['full_data']
     train_data = data["train_data"]
     val_data = data["val_data"]
@@ -180,21 +179,31 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
     train_idx_data_loader = data["train_idx_data_loader"]
     val_idx_data_loader = data["val_idx_data_loader"]
     test_idx_data_loader = data["test_idx_data_loader"]
+    train_nodes = data['train_nodes']
+    ps_batch_mask = data['ps_batch_mask']
 
-    model = Dirtrainer.model
-    optimizer = Dirtrainer.optimizer
-    model_name = Dirtrainer.model_name
-    loss_func = Dirtrainer.criterion
+    dynamic_backbone = Etrainer.model
+    if args.decoder == 1:
+        node_classifier = Mtrainer.model[1]
+        model = nn.Sequential(dynamic_backbone, node_classifier)
+        optimizer = Etrainer.optimizer
+    else:
+        node_classifier = Mtrainer.model[0]
+        model = nn.Sequential(dynamic_backbone, node_classifier)
+        optimizer = create_optimizer(model=model, optimizer_name=args.optimizer,
+                                     learning_rate=args.learning_rate, weight_decay=args.weight_decay)
 
-    save_model_name = f'dir_{model_name}'
-    save_model_folder = f"./saved_models/direct/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    model_name = Etrainer.model_name
+    loss_func = Etrainer.criterion
+    save_model_name = f'ncem_{model_name}'
+    save_model_folder = f"./saved_models/ncem/E/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
 
     shutil.rmtree(save_model_folder, ignore_errors=True)
     os.makedirs(save_model_folder, exist_ok=True)
     early_stopping = EarlyStopping(patience=args.patience, save_model_folder=save_model_folder,
                                    save_model_name=save_model_name, logger=logger, model_name=model_name)
-    best_metrics, best_metrics_gt = {'roc_auc': 0.0, 'accuracy': 0.0}, {'roc_auc': 0.0, 'accuracy': 0.0}
-    for epoch in range(args.num_epochs_direct):
+    best_metrics, best_metrics_gt = {'roc_auc': 0.0, 'acc': 0.0}, {'roc_auc': 0.0, 'acc': 0.0}
+    for epoch in range(args.num_epochs_e_step):
         model.train()
         if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
             # training process, set the neighbor sampler
@@ -207,21 +216,22 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
             model[0].memory_bank.__init_memory_bank__()
 
         # store train losses, trues and predicts
-        train_total_loss, train_y_trues, train_y_predicts, train_y_trues_gt, train_y_predicts_gt = 0.0, [], [], [], []
+        train_total_loss, train_y_trues, train_y_predicts = 0.0, [], []
         train_idx_data_loader_tqdm = tqdm(train_idx_data_loader, ncols=120)
         for batch_idx, train_data_indices in enumerate(train_idx_data_loader_tqdm):
             train_data_indices = train_data_indices.numpy()
 
             if args.dataset_name in double_way_datasets:
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_gt, batch_labels_times, batch_ps_mask = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
                     train_data.edge_ids[train_data_indices], [pseudo_labels[0][train_data_indices], pseudo_labels[1][train_data_indices]], \
                     [train_data.labels[0][train_data_indices], train_data.labels[1][train_data_indices]], \
-                    [train_data.labels_time[0][train_data_indices], train_data.labels_time[1][train_data_indices]]
+                    [train_data.labels_time[0][train_data_indices], train_data.labels_time[1][train_data_indices]], \
+                    [torch.from_numpy(ps_batch_mask[train_data_indices,0]), torch.from_numpy(ps_batch_mask[train_data_indices,1])]
             else:
-                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times = \
+                batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids, batch_labels, batch_labels_times, batch_ps_mask = \
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
-                    train_data.edge_ids[train_data_indices], pseudo_labels[0][train_data_indices], train_data.labels_time[train_data_indices]
+                    train_data.edge_ids[train_data_indices], pseudo_labels[0][train_data_indices], train_data.labels_time[train_data_indices], ps_batch_mask[train_data_indices]
 
             if model_name in ['TGAT', 'CAWN', 'TCL']:
                 # get temporal embedding of source and destination nodes
@@ -274,14 +284,15 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
-                if args.dataset_name == 'dsub': 
-                    mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0],[0,1])).to(torch.bool)
-                    mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1],[0,1])).to(torch.bool)
+                batch_ps_mask = args.iter_patience - torch.cat(batch_ps_mask, dim=0)
+                if args.dataset_name == 'dsub':
+                    mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0], [0, 1])).to(torch.bool)
+                    mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1], [0, 1])).to(torch.bool)
                 else:
                     mask_nodes_src = torch.ones_like(torch.from_numpy(batch_gt[0]), dtype=torch.bool)
                     mask_nodes_dst = torch.ones_like(torch.from_numpy(batch_gt[1]), dtype=torch.bool)
-  
-                mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst],dim=0).squeeze(dim=-1)
+
+                mask_nodes = torch.cat([mask_nodes_src, mask_nodes_dst], dim=0).squeeze(dim=-1)
                 mask_gt_src = torch.from_numpy(
                     (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
                 mask_gt_dst = torch.from_numpy(
@@ -295,27 +306,33 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
                 predicts = model[1](x=batch_src_node_embeddings)
                 labels = batch_labels.to(torch.long).to(
                     predicts.device).squeeze(dim=-1)
+                batch_ps_mask = args.iter_patience - torch.from_numpy(batch_ps_mask)
                 mask_gt = torch.from_numpy(
                     batch_node_interact_times == batch_labels_times).to(torch.bool)
                 mask_ps = ~mask_gt
 
-            if args.use_ps_back:
+            if args.ps_filter != 'none':
                 mask_ps &= (labels != -1).to('cpu')
-
             predicts_gt, labels_gt = predicts[mask_gt], labels[mask_gt]
             predicts_ps, labels_ps = predicts[mask_ps], labels[mask_ps]
-            loss_gt = loss_func(input=predicts_gt, target=labels_gt)
+            loss_gt = loss_func(input=predicts_gt, target=labels_gt).mean()
             loss_gt = torch.tensor(0.0) if torch.isnan(loss_gt) else loss_gt
-            loss_ps = loss_func(input=predicts_ps, target=labels_ps)
+            if args.use_ps_back:
+                loss_ps = loss_func(input=predicts_ps, target=labels_ps) 
+                loss_ps_weight = torch.exp(- args.alpha * (batch_ps_mask[mask_ps] - iter_num))
+                loss_ps_weight = torch.where(batch_ps_mask[mask_ps] > iter_num, loss_ps_weight, 1)
+                loss_ps *= loss_ps_weight.squeeze(dim=-1).to(loss_ps.device)
+                loss_ps = loss_ps.mean()
+            else:
+                loss_ps = loss_func(input=predicts_ps, target=labels_ps).mean()
             loss_ps = torch.tensor(0.0) if torch.isnan(loss_ps) else loss_ps
             if loss_gt == 0 and loss_ps == 0:
                 continue
             loss = loss_gt + (1-gt_weight)*loss_ps
             train_total_loss += loss.item()
-            train_y_trues.append(labels[mask_ps])
-            train_y_predicts.append(predicts[mask_ps])
-            train_y_trues_gt.append(labels[mask_gt])
-            train_y_predicts_gt.append(predicts[mask_gt])
+            train_y_trues.append(labels[mask_ps | mask_gt])
+            train_y_predicts.append(predicts[mask_ps | mask_gt])
+
             optimizer.zero_grad()
             loss.backward()
 
@@ -330,22 +347,16 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
         train_total_loss /= (batch_idx + 1)
         train_y_trues = torch.cat(train_y_trues, dim=0)
         train_y_predicts = torch.cat(train_y_predicts, dim=0)
-        train_y_trues_gt = torch.cat(train_y_trues_gt, dim=0)
-        train_y_predicts_gt = torch.cat(train_y_predicts_gt, dim=0)
+
         train_metrics = get_node_classification_metrics_em(
             predicts=train_y_predicts, labels=train_y_trues)
-        train_metrics_gt = get_node_classification_metrics_em(
-            predicts=train_y_predicts_gt, labels=train_y_trues_gt) 
         logger.info(
             f'Epoch: {epoch + 1}, learning rate: {optimizer.param_groups[0]["lr"]}, train loss: {train_total_loss:.4f}')
         for metric_name in train_metrics.keys():
             logger.info(
                 f'train {metric_name}, {train_metrics[metric_name]:.4f}')
-        for metric_name in train_metrics_gt.keys():
-            logger.info(
-                f'Ground Truth train {metric_name}, {train_metrics_gt[metric_name]:.4f}')            
 
-        val_total_loss, val_metrics, val_metrics_gt = evaluate_model_node_classification_direct(model_name=model_name,
+        val_total_loss, val_metrics, val_metrics_gt = evaluate_model_node_classification_E_step(model_name=model_name,
                                                                                                 model=model,
                                                                                                 dataset=args.dataset_name,
                                                                                                 neighbor_sampler=full_neighbor_sampler,
@@ -353,11 +364,12 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
                                                                                                 evaluate_data=val_data,
                                                                                                 pseudo_labels=pseudo_labels,
                                                                                                 offest=val_offest,
-                                                                                                use_ps_back=args.use_ps_back,
+                                                                                                ps_filter=args.ps_filter,
                                                                                                 loss_func=loss_func,
                                                                                                 num_neighbors=args.num_neighbors,
+                                                                                                double_way_datasets=double_way_datasets,
                                                                                                 time_gap=args.time_gap)
-  
+
         logger.info(f'validate loss: {val_total_loss:.4f}')
         for metric_name in val_metrics.keys():
             logger.info(
@@ -372,23 +384,24 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
                 val_backup_memory_bank = model[0].memory_bank.backup_memory_bank(
                 )
 
-            test_total_loss, test_metrics, test_metrics_gt = evaluate_model_node_classification_direct(model_name=model_name,
+            test_total_loss, test_metrics, test_metrics_gt = evaluate_model_node_classification_E_step(model_name=model_name,
                                                                                                        model=model,
                                                                                                        dataset=args.dataset_name,
                                                                                                        neighbor_sampler=full_neighbor_sampler,
                                                                                                        evaluate_idx_data_loader=test_idx_data_loader,
                                                                                                        evaluate_data=test_data,
                                                                                                        offest=test_offest,
-                                                                                                       use_ps_back=args.use_ps_back,
+                                                                                                       ps_filter=args.ps_filter,
                                                                                                        pseudo_labels=pseudo_labels,
                                                                                                        loss_func=loss_func,
                                                                                                        num_neighbors=args.num_neighbors,
+                                                                                                       double_way_datasets=double_way_datasets,
                                                                                                        time_gap=args.time_gap)
 
             if model_name in ['JODIE', 'DyRep', 'TGN']:
                 # reload validation memory bank for saving models
                 # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
-                model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)  
+                model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
             logger.info(f'test loss: {test_total_loss:.4f}')
             for metric_name in test_metrics.keys():
                 logger.info(
@@ -396,21 +409,26 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
             for metric_name in test_metrics_gt.keys():
                 logger.info(
                     f'Groun Truth test {metric_name}, {test_metrics_gt[metric_name]:.4f}')
-        # select the best model based on all the gt test metrics
-        test_metric_gt_indicator = []
+        # select the best model based on all the validate metrics
+        test_metric_indicator = []
         for metric_name in test_metrics.keys():
-            test_metric_gt_indicator.append(
-                (metric_name, test_metrics_gt[metric_name], True))
-        early_stop = early_stopping.step(test_metric_gt_indicator, model)
+            test_metric_indicator.append(
+                (metric_name, test_metrics[metric_name], True))
+        early_stop = early_stopping.step(test_metric_indicator, model, dataset_name=args.dataset_name)
+        if args.dataset_name in ['arxiv','oag']:
+            if test_metrics['acc'] > best_metrics['acc']:
+                best_metrics = test_metrics
+            if test_metrics_gt['acc'] > best_metrics_gt['acc']:
+                best_metrics_gt = test_metrics_gt
+        else :
+            if test_metrics['roc_auc'] > best_metrics['roc_auc']:
+                best_metrics = test_metrics
+            if test_metrics_gt['roc_auc'] > best_metrics_gt['roc_auc']:
+                best_metrics_gt = test_metrics_gt            
 
-        if test_metrics['roc_auc'] > best_metrics['roc_auc']:
-            best_metrics = test_metrics
         for metric_name in best_metrics.keys():
             logger.info(
                 f'Best test {metric_name}, {best_metrics[metric_name]:.4f}')
-        if test_metrics_gt['roc_auc'] > best_metrics_gt['roc_auc']:
-            best_metrics_gt = test_metrics_gt
-            best_epoch = epoch
         for metric_name in best_metrics_gt.keys():
             logger.info(
                 f'Best test Ground Truth {metric_name}, {best_metrics_gt[metric_name]:.4f}')
@@ -425,39 +443,38 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
 
     # the saved best model of memory-based models cannot perform validation since the stored memory has been updated by validation data
     if model_name not in ['JODIE', 'DyRep', 'TGN']:
-        val_total_loss, val_metric, val_metrics_gt = evaluate_model_node_classification_direct(model_name=model_name,
+        val_total_loss, val_metric, val_metrics_gt = evaluate_model_node_classification_E_step(model_name=model_name,
                                                                                                model=model,
                                                                                                dataset=args.dataset_name,
                                                                                                neighbor_sampler=full_neighbor_sampler,
                                                                                                evaluate_idx_data_loader=val_idx_data_loader,
                                                                                                evaluate_data=val_data,
                                                                                                offest=val_offest,
-                                                                                               use_ps_back=args.use_ps_back,
+                                                                                               ps_filter=args.ps_filter,
                                                                                                pseudo_labels=pseudo_labels,
                                                                                                loss_func=loss_func,
                                                                                                num_neighbors=args.num_neighbors,
+                                                                                               double_way_datasets=double_way_datasets,
                                                                                                time_gap=args.time_gap)
 
-    test_total_loss, test_metrics, test_metrics_gt = evaluate_model_node_classification_direct(model_name=model_name,
+    test_total_loss, test_metrics, test_metrics_gt = evaluate_model_node_classification_E_step(model_name=model_name,
                                                                                                model=model,
                                                                                                dataset=args.dataset_name,
                                                                                                neighbor_sampler=full_neighbor_sampler,
                                                                                                evaluate_idx_data_loader=test_idx_data_loader,
                                                                                                evaluate_data=test_data,
                                                                                                offest=test_offest,
-                                                                                               use_ps_back=args.use_ps_back,
+                                                                                               ps_filter=args.ps_filter,
                                                                                                pseudo_labels=pseudo_labels,
                                                                                                loss_func=loss_func,
                                                                                                num_neighbors=args.num_neighbors,
+                                                                                               double_way_datasets=double_way_datasets,
                                                                                                time_gap=args.time_gap)
     for metric_name in test_metrics_gt.keys():
-        logger.info(f'Best Test Ground Truth {metric_name}, {test_metrics_gt[metric_name]:.4f}')
-
-    # generating the pseudo_labels
-    pseudo_labels_list, confidence_list = [], []
-    best_epoch = 0
-    logger.info("Loop through all events to generate pseudo labels\n ")
-
+        logger.info(f'test {metric_name}, {test_metrics_gt[metric_name]:.4f}')
+    # generating the embeddings
+        # Loop through events and generate embeddings
+    src_node_embeddings_list, dst_node_embeddings_list = [], []
     if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
         model[0].set_neighbor_sampler(full_neighbor_sampler)
     if model_name in ['JODIE', 'DyRep', 'TGN']:
@@ -503,26 +520,13 @@ def Direct(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger):
                                                                       node_interact_times=batch_node_interact_times)
             else:
                 raise ValueError(f"Wrong value for model_name {model_name}!")
+        src_node_embeddings_list.append(batch_src_node_embeddings)
+        dst_node_embeddings_list.append(batch_dst_node_embeddings)
 
-            if args.dataset_name in double_way_datasets:
-                predicts = model[1](x=torch.cat(
-                    [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
+    # Concatenate all embeddings
+    new_src_embeddings = torch.cat(src_node_embeddings_list, dim=0)
+    new_dst_embeddings = torch.cat(dst_node_embeddings_list, dim=0)
+    src_node_embeddings.copy_(new_src_embeddings)
+    dst_node_embeddings.copy_(new_dst_embeddings)
+    return val_total_loss, val_metrics, test_total_loss, test_metrics
 
-            else:
-                predicts = model[1](x=batch_src_node_embeddings)
-            probabilities = torch.softmax(predicts, dim=1)
-            _, one_hot_predicts = torch.max(probabilities, dim=1)
-
-            if args.dataset_name in double_way_datasets:
-                one_hot_predicts = torch.stack([one_hot_predicts[:one_hot_predicts.shape[0]//2],one_hot_predicts[one_hot_predicts.shape[0]//2:]],dim=0)
-                pseudo_labels_list.append(one_hot_predicts.to(torch.long))
-            else:
-                pseudo_labels_list.append(one_hot_predicts.to(torch.long))
-                confidence_list.append(probabilities[0])
-
-    if args.dataset_name in double_way_datasets: 
-        new_labels = torch.cat(pseudo_labels_list, dim=1).detach()
-    else:
-        new_labels = torch.cat(pseudo_labels_list, dim=0).detach()
-    pseudo_labels.copy_(new_labels)
-    return val_total_loss, val_metrics_gt, test_total_loss, test_metrics_gt

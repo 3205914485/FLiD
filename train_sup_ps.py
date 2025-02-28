@@ -21,7 +21,7 @@ from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes, cr
 from utils.utils import get_neighbor_sampler
 from evaluate_models_utils import evaluate_model_node_classification
 from utils.metrics import get_node_classification_metrics
-from utils.DataLoader import get_idx_data_loader, get_node_classification_gt_data
+from utils.DataLoader import get_idx_data_loader, get_node_classification_ps_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_args
 
@@ -39,8 +39,8 @@ if __name__ == "__main__":
 
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, train_nodes, num_classes = \
-        get_node_classification_gt_data(
-            dataset_name=args.dataset_name, val_ratio=args.val_ratio, test_ratio=args.test_ratio, new_spilt=args.new_spilt)
+        get_node_classification_ps_data(
+            dataset_name=args.dataset_name, val_ratio=args.val_ratio, test_ratio=args.test_ratio, new_spilt=args.new_spilt, model_name=args.model_name, seed=args.start_runs)
     args.num_classes = num_classes
     # initialize validation and test neighbor sampler to retrieve temporal graph
     full_neighbor_sampler = get_neighbor_sampler(data=full_data, sample_neighbor_strategy=args.sample_neighbor_strategy,
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     val_metric_all_runs, test_metric_all_runs = [], []
 
-    for run in range(args.num_runs):
+    for run in range(args.start_runs, args.end_runs):
 
         set_random_seed(seed=run)
 
@@ -69,10 +69,10 @@ if __name__ == "__main__":
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/sup_d/{args.model_name}/{args.dataset_name}/{args.save_model_name}/", exist_ok=True)
+            f"./logs/sup_ps/{args.model_name}/{args.dataset_name}/{args.save_model_name}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/sup_d/{args.model_name}/{args.dataset_name}/{args.save_model_name}/{str(time.time())}.log")
+            f"./logs/sup_ps/{args.model_name}/{args.dataset_name}/{args.save_model_name}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -142,7 +142,7 @@ if __name__ == "__main__":
 
         # follow previous work, we freeze the dynamic_backbone and only optimize the node_classifier
         optimizer = create_optimizer(
-            model=model[1], optimizer_name=args.optimizer, learning_rate=args.learning_rate, weight_decay=args.weight_decay)
+            model=model, optimizer_name=args.optimizer, learning_rate=args.learning_rate, weight_decay=args.weight_decay)
 
         model = convert_to_gpu(model, device=args.device)
         # put the node raw messages of memory-based models on device
@@ -154,7 +154,7 @@ if __name__ == "__main__":
                         (node_raw_message[0].to(args.device), node_raw_message[1]))
                 model[0].memory_bank.node_raw_messages[node_id] = new_node_raw_messages
 
-        save_model_folder = f"./saved_models/sup_d/{args.model_name}/{args.dataset_name}/{args.save_model_name}/"
+        save_model_folder = f"./saved_models/sup_ps/{args.model_name}/{args.dataset_name}/{args.save_model_name}/"
         shutil.rmtree(save_model_folder, ignore_errors=True)
         os.makedirs(save_model_folder, exist_ok=True)
 
@@ -163,12 +163,9 @@ if __name__ == "__main__":
 
         loss_func = nn.CrossEntropyLoss()
 
-        # set the dynamic_backbone in evaluation mode
-        model[0].eval()
-
         for epoch in range(args.num_epochs):
 
-            model[1].train()
+            model.train()
             if args.model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
                 # training process, set the neighbor sampler
                 model[0].set_neighbor_sampler(full_neighbor_sampler)
@@ -191,53 +188,53 @@ if __name__ == "__main__":
                         train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
                         train_data.edge_ids[train_data_indices], train_data.labels[
                             train_data_indices], train_data.labels_time[train_data_indices]
-                with torch.no_grad():
-                    if args.model_name in ['TGAT', 'CAWN', 'TCL']:
-                        # get temporal embedding of source and destination nodes
-                        # two Tensors, with shape (batch_size, node_feat_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = \
-                            model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times,
-                                                                            num_neighbors=args.num_neighbors)
-                    elif args.model_name in ['JODIE', 'DyRep', 'TGN']:
-                        # get temporal embedding of source and destination nodes
-                        # two Tensors, with shape (batch_size, node_feat_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = \
-                            model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times,
-                                                                            edge_ids=batch_edge_ids,
-                                                                            edges_are_positive=True,
-                                                                            num_neighbors=args.num_neighbors)
-                    elif args.model_name in ['GraphMixer']:
-                        # get temporal embedding of source and destination nodes
-                        # two Tensors, with shape (batch_size, node_feat_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = \
-                            model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times,
-                                                                            num_neighbors=args.num_neighbors,
-                                                                            time_gap=args.time_gap)
-                    elif args.model_name in ['M']:
-                        # get temporal embedding of source and destination nodes
-                        # two Tensors, with shape (batch_size, node_feat_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = \
-                            model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times,
-                                                                            num_neighbors=args.num_neighbors,
-                                                                            time_gap=args.time_gap)
-                    elif args.model_name in ['DyGFormer']:
-                        # get temporal embedding of source and destination nodes
-                        # two Tensors, with shape (batch_size, node_feat_dim)
-                        batch_src_node_embeddings, batch_dst_node_embeddings = \
-                            model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                            dst_node_ids=batch_dst_node_ids,
-                                                                            node_interact_times=batch_node_interact_times)
-                    else:
-                        raise ValueError(
-                            f"Wrong value for model_name {args.model_name}!")
+                            
+                if args.model_name in ['TGAT', 'CAWN', 'TCL']:
+                    # get temporal embedding of source and destination nodes
+                    # two Tensors, with shape (batch_size, node_feat_dim)
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times,
+                                                                        num_neighbors=args.num_neighbors)
+                elif args.model_name in ['JODIE', 'DyRep', 'TGN']:
+                    # get temporal embedding of source and destination nodes
+                    # two Tensors, with shape (batch_size, node_feat_dim)
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times,
+                                                                        edge_ids=batch_edge_ids,
+                                                                        edges_are_positive=True,
+                                                                        num_neighbors=args.num_neighbors)
+                elif args.model_name in ['GraphMixer']:
+                    # get temporal embedding of source and destination nodes
+                    # two Tensors, with shape (batch_size, node_feat_dim)
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times,
+                                                                        num_neighbors=args.num_neighbors,
+                                                                        time_gap=args.time_gap)
+                elif args.model_name in ['M']:
+                    # get temporal embedding of source and destination nodes
+                    # two Tensors, with shape (batch_size, node_feat_dim)
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times,
+                                                                        num_neighbors=args.num_neighbors,
+                                                                        time_gap=args.time_gap)
+                elif args.model_name in ['DyGFormer']:
+                    # get temporal embedding of source and destination nodes
+                    # two Tensors, with shape (batch_size, node_feat_dim)
+                    batch_src_node_embeddings, batch_dst_node_embeddings = \
+                        model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                        dst_node_ids=batch_dst_node_ids,
+                                                                        node_interact_times=batch_node_interact_times)
+                else:
+                    raise ValueError(
+                        f"Wrong value for model_name {args.model_name}!")
                 # get predicted probabilities, shape (batch_size, )
                 if args.dataset_name in double_way_datasets :
                     mask_train_src = np.ones_like(batch_src_node_ids, dtype=bool)
@@ -271,6 +268,10 @@ if __name__ == "__main__":
 
                 train_idx_data_loader_tqdm.set_description(
                     f'Epoch: {epoch + 1}, train for the {batch_idx + 1}-th batch, train loss: {loss.item()}')
+                    
+                if args.model_name in ['JODIE', 'DyRep', 'TGN']:
+                    # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
+                    model[0].memory_bank.detach_memory_bank()
 
             train_total_loss /= (batch_idx + 1)
             train_y_trues = torch.cat(train_y_trues, dim=0)

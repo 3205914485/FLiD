@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
 
-    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
+    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp','arxiv','oag']
     # get arguments
     args = get_node_classification_em_args()
     # get data for training, validation and testing

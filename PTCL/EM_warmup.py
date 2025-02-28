@@ -1,12 +1,15 @@
 import torch
+
 import os
 from tqdm import tqdm
 import numpy as np
+
 import torch
 import torch.nn as nn
 
 from utils.metrics import get_link_prediction_metrics
-from utils.utils import NegativeEdgeSampler
+from utils.utils import NegativeEdgeSampler, NeighborSampler
+
 from models.modules import MergeLayer
 from utils.utils import convert_to_gpu, create_optimizer
 from utils.utils import get_neighbor_sampler, NegativeEdgeSampler
@@ -14,18 +17,47 @@ from evaluate_models_utils import evaluate_model_link_prediction
 from utils.metrics import get_link_prediction_metrics
 from utils.DataLoader import get_idx_data_loader
 from utils.EarlyStopping import EarlyStopping
+
 from models.modules import MergeLayer
 
-from Direct.trainer import Trainer
+from PTCL.trainer import Trainer
+from PTCL.M_step import train_model_node_classification_withembeddings
 
 
-def Direct_warmup(args, data, logger, Dirtrainer: Trainer):
+def em_warmup(args, data, logger, Etrainer: Trainer, Mtrainer: Trainer, src_node_embeddings, dst_node_embeddings, pseudo_labels, pseudo_labels_store):
 
     logger.info("\nStart Warming up\n")
-    link_prediction(args=args, Dirtrainer=Dirtrainer, data=data, logger=logger)
-    return 0
+    logger.info("Warm-up-1 : Start training link prediction for backbone\n")
+    new_src_embeddings, new_dst_embeddings = link_prediction(
+        args=args, Etrainer=Etrainer, data=data, logger=logger)
+    src_node_embeddings.copy_(new_src_embeddings)
+    dst_node_embeddings.copy_(new_dst_embeddings)
+    logger.info("Warm-up-2 : Start training node classification for decoder\n")
+    if args.mmodel_name =='mlp':
+        save_model_name = f'ncem_{Etrainer.model_name}'
+    else:
+        save_model_name = f'ncem_{Etrainer.model_name}_{Mtrainer.model_name}'
+    save_model_folder = f"./saved_models/ncem/M/warmup/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    val_total_loss, val_metrics, test_total_loss, test_metrics =\
+        train_model_node_classification_withembeddings(
+            args=args,
+            data=data,
+            logger=logger,
+            Etrainer=Etrainer,
+            Mtrainer=Mtrainer,
+            train=args.warmup_m_train,
+            patience=args.mw_patience,
+            pseudo_labels=pseudo_labels,
+            pseudo_labels_store=pseudo_labels_store,
+            save_model_folder=save_model_folder,
+            num_epochs=args.num_epochs_m_warmup,
+            src_node_embeddings=src_node_embeddings,
+            dst_node_embeddings=dst_node_embeddings)
 
-def link_prediction(args, Dirtrainer, data, logger):
+    return val_total_loss, val_metrics, test_total_loss, test_metrics
+
+
+def link_prediction(args, Etrainer, data, logger):
     node_raw_features = data["node_raw_features"]
     full_data = data["full_data"]
     train_data = data["train_data"]
@@ -60,28 +92,24 @@ def link_prediction(args, Dirtrainer, data, logger):
 
     link_predictor = MergeLayer(input_dim1=node_raw_features.shape[1], input_dim2=node_raw_features.shape[1],
                                 hidden_dim=node_raw_features.shape[1], output_dim=1)
-    model = nn.Sequential(Dirtrainer.model[0], link_predictor)
+    model = nn.Sequential(Etrainer.model, link_predictor)
     model = convert_to_gpu(model, device=args.device)
-    model_name = Dirtrainer.model_name
+    model_name = Etrainer.model_name
     # Considering here we do not only train the dyg_backbone , so we create optimizer for the whole model instead of using Trainer.optimizer
     optimizer = create_optimizer(model=model, optimizer_name=args.optimizer,
                                  learning_rate=args.learning_rate, weight_decay=args.weight_decay)
-    save_model_name = f'Direct_{model_name}'
-    save_model_folder = f"./saved_models/Direct/warmup/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    save_model_name = f'ncem_{model_name}'
+    save_model_folder = f"./saved_models/ncem/E/warmup/{args.dataset_name}/{args.seed}/{save_model_name}/"
     # shutil.rmtree(save_model_folder, ignore_errors=True)
     if not os.path.exists(save_model_folder):
         os.makedirs(save_model_folder, exist_ok=True)
 
-    early_stopping = EarlyStopping(patience=args.e_warmup_patience, save_model_folder=save_model_folder,
+    early_stopping = EarlyStopping(patience=args.patience, save_model_folder=save_model_folder,
                                    save_model_name=save_model_name, logger=logger, model_name=model_name)
 
     # Considering the link_prediction loss is not the same as the node_classification task of E/M trainer , so here we directly use BCEloss()
     loss_func = nn.BCELoss()
-    try:
-        early_stopping.load_checkpoint(model,map_location=args.device)
-        logger.info(f"Loading the pre-trained backbone successfully !")
-    except:
-        logger.info(f"Loading the pre-trained backbone unsuccessfully !\n Starting link-prediction train") 
+    if args.warmup_e_train:
         for epoch in range(args.num_epochs_e_warmup):
 
             model.train()
@@ -254,4 +282,66 @@ def link_prediction(args, Dirtrainer, data, logger):
 
                 if early_stop[0]:
                     break
-    return 0
+
+    # load the best model
+    early_stopping.load_checkpoint(model,map_location=args.device)
+    # generating the embeddings
+    # Loop through events and generate embeddings
+    # Etrainer.model = model[0]
+    model[0].eval()
+
+    logger.info("Loop through all events to generate embeddings\n ")
+    src_node_embeddings_list, dst_node_embeddings_list = [], []
+    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
+        model[0].set_neighbor_sampler(full_neighbor_sampler)
+    if model_name in ['JODIE', 'DyRep', 'TGN']:
+        model[0].memory_bank.__init_memory_bank__()
+
+    idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
+    for batch_idx, data_indices in enumerate(idx_data_loader_tqdm):
+        data_indices = data_indices.numpy()
+        batch_src_node_ids, batch_dst_node_ids, batch_node_interact_times, batch_edge_ids = \
+            full_data.src_node_ids[data_indices], full_data.dst_node_ids[data_indices], full_data.node_interact_times[data_indices], \
+            full_data.edge_ids[data_indices]
+
+        with torch.no_grad():
+            if model_name in ['TGAT', 'CAWN', 'TCL']:
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      num_neighbors=args.num_neighbors)
+            elif model_name in ['JODIE', 'DyRep', 'TGN']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      edge_ids=batch_edge_ids,
+                                                                      edges_are_positive=True,
+                                                                      num_neighbors=args.num_neighbors)
+            elif model_name in ['GraphMixer']:
+                # get temporal embedding of source and destination nodes
+                # two Tensors, with shape (batch_size, node_feat_dim)
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times,
+                                                                      num_neighbors=args.num_neighbors,
+                                                                      time_gap=args.time_gap)
+            elif model_name in ['DyGFormer']:
+                batch_src_node_embeddings, batch_dst_node_embeddings = \
+                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
+                                                                      dst_node_ids=batch_dst_node_ids,
+                                                                      node_interact_times=batch_node_interact_times)
+            else:
+                raise ValueError(f"Wrong value for model_name {model_name}!")
+        src_node_embeddings_list.append(batch_src_node_embeddings)
+        dst_node_embeddings_list.append(batch_dst_node_embeddings)
+
+    # Concatenate all embeddings
+    src_node_embeddings = torch.cat(src_node_embeddings_list, dim=0).detach()
+    dst_node_embeddings = torch.cat(dst_node_embeddings_list, dim=0).detach()
+
+    return src_node_embeddings, dst_node_embeddings

@@ -31,12 +31,12 @@ if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
 
-    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
+    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp','arxiv','oag']
     # get arguments
     args = get_node_classification_direct_args()
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, \
-        num_node_features, val_offest, test_offest, train_nodes, num_classes, ps_batch_mask = \
+        num_node_features, val_offest, test_offest, train_nodes, test_nodes, num_classes, ps_batch_mask = \
         get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt, em_patience=args.iter_patience)
     args.num_classes = num_classes
@@ -156,7 +156,7 @@ if __name__ == "__main__":
                 gt_weight = 1.0
 
             Direct_total_Loss, Direct_metrics, Direct_total_loss, Direct_metrics = \
-                Direct(args=args, gt_weight=gt_weight, data=data, logger=logger, Dirtrainer=Dirtrainer, 
+                Direct(args=args, gt_weight=gt_weight, data=data, logger=logger, Dirtrainer=Dirtrainer, iter_num=k,
                 pseudo_labels=pseudo_labels)
 
             pseudo_labels = update_pseudo_labels(
@@ -168,13 +168,18 @@ if __name__ == "__main__":
                     logger, 'Direct', Direct_total_Loss, Direct_metrics, Direct_metric_dict, 'validate')
             log_and_save_metrics(
                 logger, 'Direct', Direct_total_loss, Direct_metrics, Direct_metric_dict, 'test')
-
-            if list(Direct_metrics.values())[0] > best_test_all[0]:
-                best_test_all = list(Direct_metrics.values())
-                if Dirtrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+            if args.dataset_name in ['oag','arxiv']:
+                if list(Direct_metrics.values())[1] > best_test_all[1]:
+                    best_test_all = list(Direct_metrics.values())
+                    if Dirtrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+                        IterDirect_metric_dict = Direct_metric_dict
                     IterDirect_metric_dict = Direct_metric_dict
-                IterDirect_metric_dict = Direct_metric_dict
-
+            else :
+                if list(Direct_metrics.values())[0] > best_test_all[0]:
+                    best_test_all = list(Direct_metrics.values())
+                    if Dirtrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+                        IterDirect_metric_dict = Direct_metric_dict
+                    IterDirect_metric_dict = Direct_metric_dict                
             logger.info(f'Best iter metrics, auc: {best_test_all[0]}, acc: {best_test_all[1]},')
 
             test_metric_indicator = []
@@ -182,7 +187,7 @@ if __name__ == "__main__":
                 test_metric_indicator.append(
                     (metric_name, Direct_metrics[metric_name], True))
             early_stop = early_stopping.step(
-                test_metric_indicator, Dirtrainer.model)
+                test_metric_indicator, Dirtrainer.model, dataset_name=args.dataset_name)
 
             if early_stop[0]:
                 break

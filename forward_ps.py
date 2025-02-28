@@ -30,12 +30,12 @@ if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
 
-    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
+    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp','arxiv','oag']
     # get arguments
     args = get_node_classification_em_args()
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, \
-        num_node_features, val_offest, test_offest, train_nodes, num_classes, ps_batch_mask = \
+        num_node_features, val_offest, test_offest, train_nodes, test_nodes, num_classes, ps_batch_mask = \
         get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt, em_patience=args.em_patience)
     args.num_classes = num_classes
@@ -63,6 +63,7 @@ if __name__ == "__main__":
         "val_offest": val_offest,
         "test_data": test_data,
         "test_offest": test_offest,
+        "test_nodes": test_nodes,
         "full_neighbor_sampler": full_neighbor_sampler,
         "full_idx_data_loader": full_idx_data_loader,
         "train_idx_data_loader": train_idx_data_loader,
@@ -212,7 +213,7 @@ if __name__ == "__main__":
             new_labels = torch.cat(pseudo_labels_list, dim=0).detach().unsqueeze(dim=0)
         pseudo_labels.copy_(new_labels)
         pseudo_labels = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels, save_path=pseudo_labels_save_path, \
-            use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,iter_num=0,save=args.save_pseudo_labels)
+            data=data, pseudo_labels=pseudo_labels, save_path=pseudo_labels_save_path, pseudo_labels_store=[],mode='ps',\
+            double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,iter_num=0,save=args.save_pseudo_labels)
 
     sys.exit()

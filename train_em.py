@@ -13,15 +13,15 @@ import torch.nn as nn
 
 from utils.utils import set_random_seed
 from utils.utils import get_neighbor_sampler
-from utils.DataLoader import get_idx_data_loader, get_NcEM_data
+from utils.DataLoader import get_idx_data_loader, get_PTCL_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_em_args
 
-from NcEM.EM_init import em_init
-from NcEM.EM_warmup import em_warmup
-from NcEM.E_step import e_step, e_step_t
-from NcEM.M_step import m_step
-from NcEM.utils import log_and_save_metrics, log_average_metrics, save_results, update_pseudo_labels
+from PTCL.EM_init import em_init
+from PTCL.EM_warmup import em_warmup
+from SEM.E_step import sem_e_step
+from SEM.M_step import sem_m_step
+from PTCL.utils import log_and_save_metrics, log_average_metrics, save_results, update_pseudo_labels
 
 cpu_num = 2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
@@ -32,13 +32,13 @@ if __name__ == "__main__":
 
     warnings.filterwarnings('ignore')
 
-    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp']
+    double_way_datasets = ['bot','bot22','dgraph','dsub','yelp','arxiv','oag']
     # get arguments
     args = get_node_classification_em_args()
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, \
         num_node_features, val_offest, test_offest, train_nodes, test_nodes, num_classes, ps_batch_mask = \
-        get_NcEM_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
+        get_PTCL_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt, em_patience=args.em_patience)
     args.num_classes = num_classes
     # initialize validation and test neighbor sampler to retrieve temporal graph
@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
         logger.info(f'configuration is {args}')
 
-        # NcEM strating:
+        # PTCL strating:
 
         # EM data:
         pseudo_labels_save_path = f"processed_data/{args.dataset_name}/pseudo_labels/{args.emodel_name}/{args.seed}/"
@@ -123,10 +123,12 @@ if __name__ == "__main__":
         if args.dataset_name in double_way_datasets:
             pseudo_labels = torch.zeros(
                 2, num_interactions, device=args.device)
+            pseudo_labels_store = []
         else:
             pseudo_labels = torch.zeros(
                 1, num_interactions, device=args.device)
-
+            pseudo_labels_store = []
+            
         base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict = {}, {}, {}, {}, {}, {}
        
         # EM Warmup
@@ -145,6 +147,7 @@ if __name__ == "__main__":
                       Etrainer=Etrainer,
                       Mtrainer=Mtrainer,
                       pseudo_labels=pseudo_labels,
+                      pseudo_labels_store=pseudo_labels_store,
                       src_node_embeddings=src_node_embeddings,
                       dst_node_embeddings=dst_node_embeddings)
 
@@ -152,8 +155,8 @@ if __name__ == "__main__":
             Mtrainer.model[0].load_state_dict(Mtrainer.model[1].state_dict())
 
         pseudo_labels = update_pseudo_labels(
-            data=data, pseudo_labels=pseudo_labels, mode=args.mode,\
-            use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive, em_patience=args.em_patience)
+            data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, mode=args.mode, ps_filter=args.ps_filter,\
+            double_way_dataset=double_way_datasets, use_transductive=args.use_transductive, threshold=args.filter_threshold)
 
         if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
@@ -184,22 +187,22 @@ if __name__ == "__main__":
                 gt_weight = 0.1 + (args.gt_weight - 0.1) * np.exp(-0.1 * k)
             else:
                 gt_weight = 1.0
-            if args.use_transductive:
-                Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
-                    e_step_t(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
-            else:
-                Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
-                    e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                        src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, iter_num=k)
 
+            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
+                e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+                    src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, iter_num=k)
+                
+            pseudo_labels = update_pseudo_labels(
+                data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, save_path=pseudo_labels_save_path, mode=args.mode, ps_filter=args.ps_filter,\
+                double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, threshold=args.filter_threshold)
+                
             Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
-                m_step(args=args,  data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
-                       src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
+                m_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+                       pseudo_labels_store=pseudo_labels_store, src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, iter_num=k)
 
             pseudo_labels = update_pseudo_labels(
-                data=data, pseudo_labels=pseudo_labels, save_path=pseudo_labels_save_path, mode=args.mode,\
-                use_ps_back=args.use_ps_back, double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, em_patience=args.em_patience)
+                data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, save_path=pseudo_labels_save_path, mode=args.mode, ps_filter=args.ps_filter,\
+                double_way_dataset=double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, threshold=args.filter_threshold)
             
             if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
                 log_and_save_metrics(
@@ -210,21 +213,27 @@ if __name__ == "__main__":
                 logger, 'Estep', Etest_total_loss, Etest_metrics, Etest_metric_dict, 'test')
             log_and_save_metrics(
                 logger, 'Mstep', Mtest_total_loss, Mtest_metrics, Mtest_metric_dict, 'test')
+            if args.dataset_name in ['oag','arxiv']:
+                if list(Mtest_metrics.values())[1] > best_test_all[1]:
+                    best_test_all = list(Mtest_metrics.values())
+                    if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+                        IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
+                    IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
+            else:
+                if list(Mtest_metrics.values())[0] > best_test_all[0]:
+                    best_test_all = list(Mtest_metrics.values())
+                    if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+                        IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
+                    IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
 
-            if list(Mtest_metrics.values())[0] > best_test_all[0]:
-                best_test_all = list(Mtest_metrics.values())
-                if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
-                    IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
-                IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
-
-            logger.info(f'Best iter metrics, auc: {best_test_all[0]}, acc: {best_test_all[1]},')
+            logger.info(f'Best iter metrics, auc: {best_test_all[0]}, acc: {best_test_all[1]}')
 
             test_metric_indicator = []
             for metric_name in Mtest_metrics.keys():
                 test_metric_indicator.append(
                     (metric_name, Mtest_metrics[metric_name], True))
             early_stop = early_stopping.step(
-                test_metric_indicator, nn.Sequential(Etrainer.model, Mtrainer.model))
+                test_metric_indicator, nn.Sequential(Etrainer.model, Mtrainer.model), dataset_name=args.dataset_name)
 
             if early_stop[0]:
                 break

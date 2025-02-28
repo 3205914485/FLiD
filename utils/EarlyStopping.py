@@ -26,7 +26,7 @@ class EarlyStopping(object):
             # path to additionally save the nonparametric data (e.g., tensors) in memory-based models (e.g., JODIE, DyRep, TGN)
             self.save_model_nonparametric_data_path = os.path.join(save_model_folder, f"{save_model_name}_nonparametric_data.pkl")
 
-    def step(self, metrics: list, model: nn.Module):
+    def step(self, metrics: list, model: nn.Module, dataset_name: str='wikipedia'):
         """
         execute the early stop strategy for each evaluation process
         :param metrics: list, list of metrics, each element is a tuple (str, float, boolean) -> (metric_name, metric_value, whether higher means better)
@@ -47,17 +47,30 @@ class EarlyStopping(object):
                     metrics_compare_results.append(True)
                 else:
                     metrics_compare_results.append(False)
-        if metrics_compare_results[0]:
-            for metric_tuple in metrics:
-                metric_name, metric_value = metric_tuple[0], metric_tuple[1]
-                self.best_metrics[metric_name] = metric_value
-            self.save_checkpoint(model)
-            self.counter = 0
-        # metrics are not better at the epoch
+        if dataset_name in ['arxiv', 'oag']:
+            if metrics_compare_results[1]: # means acc
+                for metric_tuple in metrics:
+                    metric_name, metric_value = metric_tuple[0], metric_tuple[1]
+                    self.best_metrics[metric_name] = metric_value
+                self.save_checkpoint(model)
+                self.counter = 0
+            # metrics are not better at the epoch
+            else:
+                self.counter += 1
+                if self.counter >= self.patience:
+                    self.early_stop = True
         else:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
+            if metrics_compare_results[0]: # means auc
+                for metric_tuple in metrics:
+                    metric_name, metric_value = metric_tuple[0], metric_tuple[1]
+                    self.best_metrics[metric_name] = metric_value
+                self.save_checkpoint(model)
+                self.counter = 0
+            # metrics are not better at the epoch
+            else:
+                self.counter += 1
+                if self.counter >= self.patience:
+                    self.early_stop = True
 
         return self.early_stop , self.counter
 
