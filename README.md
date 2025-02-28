@@ -1,4 +1,4 @@
-# FLiD: Dynamic Graph Learning Framework with Final Timestamp Labels
+# FLiD: **F**ramework for **L**abel-L**i**mited **D**ynamic Node Classification
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)](https://pytorch.org/)
 
