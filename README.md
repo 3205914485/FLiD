@@ -13,7 +13,6 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
   <img src='images/overview.png'>
 </p>
 
-
 ## 🚀 Key Features
 - **Novel Architecture**
   * Dual-model EM optimization with pseudo-label enhancement
