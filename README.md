@@ -21,7 +21,7 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     * NPL (Naive Pseudo-Labels) 
     * SEM (Standard EM) 
     * PTCL-2D (PTCL with 2 Decoders) 
-    * PTCL-2D
+    * PTCL
   ![Methods](images/methods.png)
   * Support for below pseudo-labels enhancement methods:
     * Confidence Score Threshold (CST)
@@ -163,7 +163,7 @@ FLiD/
 Framework tracks multiple metrics through `log_and_save_metrics()`:
 ```python
 # Sample metric output
-2023-11-15 14:30:00 - Estep - INFO - Test Metrics:
+2025-1-15 14:30:00 - Estep - INFO - Test Metrics:
 {
     "AUC": 0.892,
     "Accuracy": 0.814,
@@ -180,7 +180,7 @@ We welcome contributions! Please follow our [contribution guidelines](CONTRIBUTI
 ## 📜 Citation
 If using FLiD in your research, please cite:
 ```bibtex
-@article{flid2023,
+@article{ptcl2025,
   title={PTCL: Pseudo-Label Temporal Curriculum Learning for Label-Limited Dynamic Graph},
   author={Shengtao Zhang, Haokai Zhang, Shiqi Lou, Zicheng Wang, Zinan Zeng, Yilin Wang, Minnan Luo},
   journal={Waiting},
