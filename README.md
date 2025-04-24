@@ -64,7 +64,7 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
 
 - **Data Preprocessing**
 
-    Use the `preprocess` script to process the data.
+    Use the `preprocess` script to process the data. The data will be made publicly available soon.
 
 - **Step 1: Warmup**
 
@@ -74,12 +74,12 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     - `dataset`: Choose the dataset (e.g., `reddit` or `wikipedia`)
     - `threshold`: Pseudo-label threshold (e.g., `0.5`)
     - `gt_weight`: Pseudo-label weight (e.g., `0.9`)
-
+<!-- 
     Run the warmup step:
 
     ```bash
     bash warmup.sh
-    ```
+    ``` -->
 
 - **Step 2: Training**
 
@@ -90,12 +90,12 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     - `alphas`: Set different hyperparameters (e.g., `0.1`)
     - `gpus`: Specify the GPUs to use (e.g., `[1]`)
     - `max_tasks_per_gpu`: Maximum tasks per GPU (e.g., `1`)
-
+<!-- 
     Run the training script:
 
     ```bash
     bash train.sh
-    ```
+    ``` -->
 
 - **Results**
 
