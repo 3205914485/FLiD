@@ -60,13 +60,6 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
   - Reproducible seed management
   - Multi-run experiment support
 
-## 📦 Installation
-```bash
-conda create -n flid python=3.8
-conda activate flid
-pip install -r requirements.txt
-```
-
 ## 🛠 Usage
 
 - **Data Preprocessing**
