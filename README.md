@@ -17,7 +17,8 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
 - **Novel Architecture**
   * Dual-model EM optimization with pseudo-label enhancement
   * Support for below paradigms with modular components: 
-    * CFT (Copy-Final Timestamp labels) * DLS (Dynamic Label Supervision)
+    * CFT (Copy-Final Timestamp labels) 
+    * DLS (Dynamic Label Supervision)
     * NPL (Naive Pseudo-Labels) 
     * SEM (Standard EM) 
     * PTCL-2D (PTCL with 2 Decoders) 
