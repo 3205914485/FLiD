@@ -4,7 +4,8 @@
 
 This repository is built for the paper
 
-[PTCL: Pseudo-Label Temporal Curriculum Learning for Label-Limited Dynamic Graph](https://arxiv.org/abs/2504.17641)
+<!-- [PTCL: Pseudo-Label Temporal Curriculum Learning for Label-Limited Dynamic Graph](https://arxiv.org/abs/2504.17641) -->
+PTCL: Pseudo-Label Temporal Curriculum Learning for Label-Limited Dynamic Graph
 
 FLiD is a novel framework for dynamic graph learning where only final timestamp labels are available. Designed for extensibility and fairness, it supports cutting-edge research in temporal graph analysis through:
 
