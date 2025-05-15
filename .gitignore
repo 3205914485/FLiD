@@ -6,7 +6,7 @@ saved_results/
 nohup.md
 nohup.out
 __pycache__
-*.ipynb
+# *.ipynb
 env/
 *.sh
 old_data/
