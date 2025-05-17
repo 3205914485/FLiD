@@ -4,7 +4,6 @@
 
 This repository is built for the paper
 
-<!-- [PTCL: Pseudo-Label Temporal Curriculum Learning for Label-Limited Dynamic Graph](https://arxiv.org/abs/2504.17641) -->
 PTCL: Pseudo-Label Temporal Curriculum Learning for Label-Limited Dynamic Graph
 
 FLiD is a novel framework for dynamic graph learning where only final timestamp labels are available. Designed for extensibility and fairness, it supports cutting-edge research in temporal graph analysis through:
@@ -62,41 +61,58 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
 
 ## 🛠 Usage
 
+- **Requirements**
+  To install requirements:
+    ```bash
+    conda create --name <env> --file requirements.txt
+    ```
 - **Data Preprocessing**
 
-    Use the `preprocess` script to process the data. The data will be made publicly available soon.
-
-- **Step 1: Warmup**
+    Use the `preprocess.ipynb` script to process the data. Or just skip the step if the dataset has been saved in `processed_data` 
+    
+- **Training**
+  - **Step 1: Warmup**
 
     1. Configure the following parameters for the warmup training:
-    - `model_name`: Choose the model (e.g., `TGAT`)
-    - `gpu`: Specify the GPU to use (e.g., `5`)
-    - `dataset`: Choose the dataset (e.g., `reddit` or `wikipedia`)
-    - `threshold`: Pseudo-label threshold (e.g., `0.5`)
-    - `gt_weight`: Pseudo-label weight (e.g., `0.9`)
-<!-- 
-    Run the warmup step:
+    - `method`: Choose the method (e.g., `ptcl`) 
+    - `mmodel_name`: Choose the model-backbone (e.g., `TGAT`)
+    - `gpu`: Specify the GPU to use (e.g., `0`)
+    - `dataset_name`: Choose the dataset (e.g., `reddit` or `wikipedia`) 
+    - `warmup_m_train`: warmup-train-backbone (e.g., `1`)
+    - `warmup_e_train`: warmup-train-decoder (e.g., `1`)
+    - `num_epochs_e_warmup`: warmup epochs (e.g., `100`)
+    - `num_epochs_m_warmup`: warmup epochs (e.g., `100`)
+    1. Run the warmup step :
 
     ```bash
-    bash warmup.sh
-    ``` -->
+    python train.py
+    ```
 
-- **Step 2: Training**
+  - **Step 2: Train**
 
     1. Configure the following parameters for training:
-    - `method`: Choose the training method (e.g., `PTCL`, `SEM`, `NPL`)
-    - `dataset`: Choose the dataset (e.g., `reddit`, `wikipedia`, `oag`)
-    - `gt_weight`: Pseudo-label weight (e.g., `0.5`)
-    - `alphas`: Set different hyperparameters (e.g., `0.1`)
-    - `gpus`: Specify the GPUs to use (e.g., `[1]`)
-    - `max_tasks_per_gpu`: Maximum tasks per GPU (e.g., `1`)
-<!-- 
-    Run the training script:
+    - `method`: Choose the training method (e.g., `ptcl`, `sem`, `npl`)
+    - `dataset_name`: Choose the dataset (e.g., `reddit`, `wikipedia`, `oag`)
+    - `gt_weight`: gourd-truth label weight ($\beta$ in the paper) (e.g., `0.5`)
+    - `alphas`: Exp decay for Temporal Curriculum learning ($\gamma$ in the paper)(e.g., `0.1`)
+    - `gpus`: Specify the GPUs to use (e.g., `0`)
+    - `warmup_m_train`: warmup-train-backbone (e.g., `0`)
+    - `warmup_e_train`: warmup-train-decoder (e.g., `0`)
+    - `num_epochs_e_step`: number of epochs of E step (e.g., `200`)
+    - `num_epochs_m_step`: number of epochs of M step (e.g., `100`)
+    - `num_em_iters`: number of iters of E-M step (e.g., `30`)
+    - `ps_filter`: pseudo-labels filter mechanism (e.g., `entropy` for EST,  `None` for TCL)
+    2. Run the training script:
 
     ```bash
-    bash train.sh
-    ``` -->
-
+    python train.py
+    ```
+- **Evaluation**
+  
+  follow the train-configure:
+    ```bash
+    python eval.py
+    ```
 - **Results**
 
     - During training, the `logs/` directory will save the training logs.
@@ -150,7 +166,8 @@ FLiD/
 │   └── utils.py               # Useful tools
 │   └── metrics.py             # Metrics calculating tools
 │
-└── train.py                   # Experiment entry point
+├── train.py                   # Experiment train python
+└── eval.py                    # Experiment evaluate python
 ```
 
 ## 📈 Evaluation Metrics

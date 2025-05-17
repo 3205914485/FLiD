@@ -12,8 +12,8 @@ def log_and_save_metrics(logger, phase, loss, metrics, metric_dict, prefix):
         metric_dict[metric_name] = metric_value
 
 
-def save_results(args, Etrainer, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict, run):
-    if Etrainer.model_name not in ['JODIE', 'DyRep', 'TGN']:
+def save_results(args, Mtrainer, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict, run):
+    if Mtrainer.model_name not in ['TGN']:
         result_json = {
             "Evalidate metrics": {metric_name: f'{Eval_metric_dict[metric_name]:.4f}' for metric_name in Eval_metric_dict},
             "Etest metrics": {metric_name: f'{Etest_metric_dict[metric_name]:.4f}' for metric_name in Etest_metric_dict},
@@ -27,7 +27,7 @@ def save_results(args, Etrainer, Eval_metric_dict, Etest_metric_dict, Mval_metri
         }
     result_json = json.dumps(result_json, indent=4)
 
-    save_result_folder = f"./saved_results/ncem/{args.prefix}/{run}/{args.dataset_name}"
+    save_result_folder = f"./saved_results/ptcl/{args.prefix}/{run}/{args.dataset_name}"
     os.makedirs(save_result_folder, exist_ok=True)
     save_result_path = os.path.join(
         save_result_folder, f"{args.emodel_name}_{args.mmodel_name}.json")

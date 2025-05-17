@@ -18,8 +18,8 @@ from utils.load_configs import get_node_classification_em_args
 
 from PTCL.EM_init import em_init
 from PTCL.EM_warmup import em_warmup
-from PTCL.E_step import e_step
 from PTCL.M_step import m_step
+from PTCL.E_step import e_step
 from PTCL.utils import log_and_save_metrics, save_results, update_pseudo_labels
 
 from SEM.E_step import sem_e_step
@@ -46,10 +46,10 @@ def PTCL(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/train/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/train/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -90,7 +90,7 @@ def PTCL(args, data):
         base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict = {}, {}, {}, {}, {}, {}
        
         # EM Warmup
-        Etrainer, Mtrainer = em_init(args=args,
+        Mtrainer, Etrainer = em_init(args=args,
                                      logger=logger,
                                      train_data=train_data,
                                      node_raw_features=node_raw_features,
@@ -102,21 +102,21 @@ def PTCL(args, data):
             em_warmup(args=args,
                       data=data,
                       logger=logger,
-                      Etrainer=Etrainer,
                       Mtrainer=Mtrainer,
+                      Etrainer=Etrainer,
                       pseudo_labels=pseudo_labels,
                       pseudo_labels_store=pseudo_labels_store,
                       src_node_embeddings=src_node_embeddings,
                       dst_node_embeddings=dst_node_embeddings)
 
         if args.decoder == 2:
-            Mtrainer.model[0].load_state_dict(Mtrainer.model[1].state_dict())
+            Etrainer.model[0].load_state_dict(Etrainer.model[1].state_dict())
 
         pseudo_labels = update_pseudo_labels(
             data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, mode=args.mode, ps_filter=args.ps_filter,\
             double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive, threshold=args.filter_threshold)
 
-        if Etrainer.model_name not in ['TGN']:
+        if Mtrainer.model_name not in ['TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
                                  base_val_metrics, base_val_metric_dict, 'validate')
         log_and_save_metrics(logger, 'Warm-up base', base_test_total_loss,
@@ -126,10 +126,10 @@ def PTCL(args, data):
             if run < args.end_runs - 1:
                 logger.removeHandler(fh)
                 logger.removeHandler(ch)
+            best_test_all = list(base_test_metrics.values())
             continue
-
         # EM training
-        model_name = Etrainer.model_name
+        model_name = Mtrainer.model_name
         save_model_name = f'ptcl_{model_name}'
         save_model_folder = f"./saved_models/ptcl/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
         shutil.rmtree(save_model_folder, ignore_errors=True)
@@ -146,19 +146,19 @@ def PTCL(args, data):
             else:
                 gt_weight = 1.0
 
-            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
-                e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
+                m_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Mtrainer=Mtrainer, Etrainer=Etrainer, pseudo_labels=pseudo_labels,
                     src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, iter_num=k)
 
-            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
-                m_step(args=args, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
+                e_step(args=args, data=data, logger=logger, Mtrainer=Mtrainer, Etrainer=Etrainer, pseudo_labels=pseudo_labels,
                        pseudo_labels_store=pseudo_labels_store, src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
 
             pseudo_labels = update_pseudo_labels(
                 data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, save_path=pseudo_labels_save_path, mode=args.mode, ps_filter=args.ps_filter,\
                 double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, threshold=args.filter_threshold)
             
-            if Etrainer.model_name not in ['TGN']:
+            if Mtrainer.model_name not in ['TGN']:
                 log_and_save_metrics(
                     logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')
                 log_and_save_metrics(
@@ -169,26 +169,26 @@ def PTCL(args, data):
                 logger, 'Mstep', Mtest_total_loss, Mtest_metrics, Mtest_metric_dict, 'test')
 
             if args.dataset_name in ['oag']:
-                if list(Mtest_metrics.values())[1] > best_test_all[1]:
-                    best_test_all = list(Mtest_metrics.values())
-                    if Etrainer.model_name not in ['TGN']:
+                if list(Etest_metrics.values())[1] > best_test_all[1]:
+                    best_test_all = list(Etest_metrics.values())
+                    if Mtrainer.model_name not in ['TGN']:
                         IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
                     IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
             else:
-                if list(Mtest_metrics.values())[0] > best_test_all[0]:
-                    best_test_all = list(Mtest_metrics.values())
-                    if Etrainer.model_name not in ['TGN']:
+                if list(Etest_metrics.values())[0] > best_test_all[0]:
+                    best_test_all = list(Etest_metrics.values())
+                    if Mtrainer.model_name not in ['TGN']:
                         IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
                     IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
 
             logger.info(f'Best iter metrics, auc: {best_test_all[0]}, acc: {best_test_all[1]}')
 
             test_metric_indicator = []
-            for metric_name in Mtest_metrics.keys():
+            for metric_name in Etest_metrics.keys():
                 test_metric_indicator.append(
-                    (metric_name, Mtest_metrics[metric_name], True))
+                    (metric_name, Etest_metrics[metric_name], True))
             early_stop = early_stopping.step(
-                test_metric_indicator, nn.Sequential(Etrainer.model, Mtrainer.model), dataset_name=args.dataset_name)
+                test_metric_indicator, nn.Sequential(Mtrainer.model, Etrainer.model), dataset_name=args.dataset_name)
 
             if early_stop[0]:
                 break
@@ -202,7 +202,7 @@ def PTCL(args, data):
             logger.removeHandler(ch)
 
         # save model result
-        save_results(args, Etrainer, IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict, run)
+        save_results(args, Mtrainer, IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict, run)
 
     return best_test_all
 
@@ -219,10 +219,10 @@ def SEM(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/sem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/train/sem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/sem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/train/sem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -241,7 +241,7 @@ def SEM(args, data):
 
         logger.info(f'configuration is {args}')
 
-        # PTCL strating:
+        # SEM strating:
 
         # EM data:
         pseudo_labels_save_path = f"processed_data/{args.dataset_name}/pseudo_labels/{args.emodel_name}/{args.seed}/"
@@ -263,7 +263,7 @@ def SEM(args, data):
         base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict = {}, {}, {}, {}, {}, {}
        
         # EM Warmup
-        Etrainer, Mtrainer = em_init(args=args,
+        Mtrainer, Etrainer = em_init(args=args,
                                      logger=logger,
                                      train_data=train_data,
                                      node_raw_features=node_raw_features,
@@ -275,21 +275,21 @@ def SEM(args, data):
             em_warmup(args=args,
                       data=data,
                       logger=logger,
-                      Etrainer=Etrainer,
                       Mtrainer=Mtrainer,
+                      Etrainer=Etrainer,
                       pseudo_labels=pseudo_labels,
                       pseudo_labels_store=pseudo_labels_store,
                       src_node_embeddings=src_node_embeddings,
                       dst_node_embeddings=dst_node_embeddings)
 
         if args.decoder == 2:
-            Mtrainer.model[0].load_state_dict(Mtrainer.model[1].state_dict())
+            Etrainer.model[0].load_state_dict(Etrainer.model[1].state_dict())
 
         pseudo_labels = update_pseudo_labels(
             data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, mode=args.mode, ps_filter=args.ps_filter,\
             double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive, threshold=args.filter_threshold)
 
-        if Etrainer.model_name not in ['TGN']:
+        if Mtrainer.model_name not in ['TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
                                  base_val_metrics, base_val_metric_dict, 'validate')
         log_and_save_metrics(logger, 'Warm-up base', base_test_total_loss,
@@ -299,10 +299,11 @@ def SEM(args, data):
             if run < args.end_runs - 1:
                 logger.removeHandler(fh)
                 logger.removeHandler(ch)
+            best_test_all = list(base_test_metrics.values())
             continue
 
         # EM training
-        model_name = Etrainer.model_name
+        model_name = Mtrainer.model_name
         save_model_name = f'sem_{model_name}'
         save_model_folder = f"./saved_models/sem/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
         shutil.rmtree(save_model_folder, ignore_errors=True)
@@ -319,23 +320,23 @@ def SEM(args, data):
             else:
                 gt_weight = 1.0
 
-            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
-                sem_e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
+                sem_m_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Mtrainer=Mtrainer, Etrainer=Etrainer, pseudo_labels=pseudo_labels,
                     src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, iter_num=k)
                 
             pseudo_labels = update_pseudo_labels(
                 data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, save_path=pseudo_labels_save_path, mode=args.mode, ps_filter=args.ps_filter,\
                 double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, threshold=args.filter_threshold)
                 
-            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
-                sem_m_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
+                sem_e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Mtrainer=Mtrainer, Etrainer=Etrainer, pseudo_labels=pseudo_labels,
                        pseudo_labels_store=pseudo_labels_store, src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, iter_num=k)
 
             pseudo_labels = update_pseudo_labels(
                 data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, save_path=pseudo_labels_save_path, mode=args.mode, ps_filter=args.ps_filter,\
                 double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, threshold=args.filter_threshold)
             
-            if Etrainer.model_name not in ['TGN']:
+            if Mtrainer.model_name not in ['TGN']:
                 log_and_save_metrics(
                     logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')
                 log_and_save_metrics(
@@ -346,26 +347,26 @@ def SEM(args, data):
                 logger, 'Mstep', Mtest_total_loss, Mtest_metrics, Mtest_metric_dict, 'test')
 
             if args.dataset_name in ['oag']:
-                if list(Mtest_metrics.values())[1] > best_test_all[1]:
-                    best_test_all = list(Mtest_metrics.values())
-                    if Etrainer.model_name not in ['TGN']:
+                if list(Etest_metrics.values())[1] > best_test_all[1]:
+                    best_test_all = list(Etest_metrics.values())
+                    if Mtrainer.model_name not in ['TGN']:
                         IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
                     IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
             else:
-                if list(Mtest_metrics.values())[0] > best_test_all[0]:
-                    best_test_all = list(Mtest_metrics.values())
-                    if Etrainer.model_name not in ['TGN']:
+                if list(Etest_metrics.values())[0] > best_test_all[0]:
+                    best_test_all = list(Etest_metrics.values())
+                    if Mtrainer.model_name not in ['TGN']:
                         IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
                     IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
 
             logger.info(f'Best iter metrics, auc: {best_test_all[0]}, acc: {best_test_all[1]}')
 
             test_metric_indicator = []
-            for metric_name in Mtest_metrics.keys():
+            for metric_name in Etest_metrics.keys():
                 test_metric_indicator.append(
-                    (metric_name, Mtest_metrics[metric_name], True))
+                    (metric_name, Etest_metrics[metric_name], True))
             early_stop = early_stopping.step(
-                test_metric_indicator, nn.Sequential(Etrainer.model, Mtrainer.model), dataset_name=args.dataset_name)
+                test_metric_indicator, nn.Sequential(Mtrainer.model, Etrainer.model), dataset_name=args.dataset_name)
 
             if early_stop[0]:
                 break
@@ -379,7 +380,7 @@ def SEM(args, data):
             logger.removeHandler(ch)
 
         # save model result
-        save_results(args, Etrainer, IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict, run)
+        save_results(args, Mtrainer, IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict, run)
 
     return best_test_all
 
@@ -396,10 +397,10 @@ def NPL(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/npl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/train/npl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/npl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/train/npl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -511,7 +512,7 @@ def NPL(args, data):
             logger.removeHandler(ch)
 
         # save model result
-        save_results(args, Etrainer, [], [], IterNPL_val_metric_dict, IterNPL_test_metric_dict, run)
+        save_results(args, Dirtrainer, [], [], IterNPL_val_metric_dict, IterNPL_test_metric_dict, run)
         # No E-step for NPL
     return best_test_all
 
@@ -529,10 +530,10 @@ def PTCL_2D(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/train/ptcl_2d/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/train/ptcl_2d/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -551,7 +552,7 @@ def PTCL_2D(args, data):
 
         logger.info(f'configuration is {args}')
 
-        # PTCL strating:
+        # ptcl_2d strating:
 
         # EM data:
         pseudo_labels_save_path = f"processed_data/{args.dataset_name}/pseudo_labels/{args.emodel_name}/{args.seed}/"
@@ -573,7 +574,7 @@ def PTCL_2D(args, data):
         base_val_metric_dict, base_test_metric_dict, Eval_metric_dict, Etest_metric_dict, Mval_metric_dict, Mtest_metric_dict = {}, {}, {}, {}, {}, {}
        
         # EM Warmup
-        Etrainer, Mtrainer = em_init(args=args,
+        Mtrainer, Etrainer = em_init(args=args,
                                      logger=logger,
                                      train_data=train_data,
                                      node_raw_features=node_raw_features,
@@ -585,21 +586,21 @@ def PTCL_2D(args, data):
             em_warmup(args=args,
                       data=data,
                       logger=logger,
-                      Etrainer=Etrainer,
                       Mtrainer=Mtrainer,
+                      Etrainer=Etrainer,
                       pseudo_labels=pseudo_labels,
                       pseudo_labels_store=pseudo_labels_store,
                       src_node_embeddings=src_node_embeddings,
                       dst_node_embeddings=dst_node_embeddings)
 
         if args.decoder == 2:
-            Mtrainer.model[0].load_state_dict(Mtrainer.model[1].state_dict())
+            Etrainer.model[0].load_state_dict(Etrainer.model[1].state_dict())
 
         pseudo_labels = update_pseudo_labels(
             data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, mode=args.mode, ps_filter=args.ps_filter,\
             double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive, threshold=args.filter_threshold)
 
-        if Etrainer.model_name not in ['TGN']:
+        if Mtrainer.model_name not in ['TGN']:
             log_and_save_metrics(logger, 'Warm-up base', base_val_total_loss,
                                  base_val_metrics, base_val_metric_dict, 'validate')
         log_and_save_metrics(logger, 'Warm-up base', base_test_total_loss,
@@ -609,12 +610,13 @@ def PTCL_2D(args, data):
             if run < args.end_runs - 1:
                 logger.removeHandler(fh)
                 logger.removeHandler(ch)
+            best_test_all = list(base_test_metrics.values())
             continue
 
         # EM training
-        model_name = Etrainer.model_name
+        model_name = Mtrainer.model_name
         save_model_name = f'ptcl_{model_name}'
-        save_model_folder = f"./saved_models/ptcl/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+        save_model_folder = f"./saved_models/ptcl_2d/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
         shutil.rmtree(save_model_folder, ignore_errors=True)
         os.makedirs(save_model_folder, exist_ok=True)
         early_stopping = EarlyStopping(patience=args.iter_patience, save_model_folder=save_model_folder,
@@ -629,19 +631,19 @@ def PTCL_2D(args, data):
             else:
                 gt_weight = 1.0
 
-            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
-                e_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
+                m_step(args=args, gt_weight=gt_weight, data=data, logger=logger, Mtrainer=Mtrainer, Etrainer=Etrainer, pseudo_labels=pseudo_labels,
                     src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings, iter_num=k)
 
-            Mval_total_loss, Mval_metrics, Mtest_total_loss, Mtest_metrics = \
-                m_step(args=args, data=data, logger=logger, Etrainer=Etrainer, Mtrainer=Mtrainer, pseudo_labels=pseudo_labels,
+            Eval_total_loss, Eval_metrics, Etest_total_loss, Etest_metrics = \
+                e_step(args=args, data=data, logger=logger, Mtrainer=Mtrainer, Etrainer=Etrainer, pseudo_labels=pseudo_labels,
                        pseudo_labels_store=pseudo_labels_store, src_node_embeddings=src_node_embeddings, dst_node_embeddings=dst_node_embeddings)
 
             pseudo_labels = update_pseudo_labels(
                 data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, save_path=pseudo_labels_save_path, mode=args.mode, ps_filter=args.ps_filter,\
                 double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, threshold=args.filter_threshold)
             
-            if Etrainer.model_name not in ['TGN']:
+            if Mtrainer.model_name not in ['TGN']:
                 log_and_save_metrics(
                     logger, 'Estep', Eval_total_loss, Eval_metrics, Eval_metric_dict, 'validate')
                 log_and_save_metrics(
@@ -652,26 +654,26 @@ def PTCL_2D(args, data):
                 logger, 'Mstep', Mtest_total_loss, Mtest_metrics, Mtest_metric_dict, 'test')
 
             if args.dataset_name in ['oag']:
-                if list(Mtest_metrics.values())[1] > best_test_all[1]:
-                    best_test_all = list(Mtest_metrics.values())
-                    if Etrainer.model_name not in ['TGN']:
+                if list(Etest_metrics.values())[1] > best_test_all[1]:
+                    best_test_all = list(Etest_metrics.values())
+                    if Mtrainer.model_name not in ['TGN']:
                         IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
                     IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
             else:
-                if list(Mtest_metrics.values())[0] > best_test_all[0]:
-                    best_test_all = list(Mtest_metrics.values())
-                    if Etrainer.model_name not in ['TGN']:
+                if list(Etest_metrics.values())[0] > best_test_all[0]:
+                    best_test_all = list(Etest_metrics.values())
+                    if Mtrainer.model_name not in ['TGN']:
                         IterEval_metric_dict, IterMval_metric_dict = Eval_metric_dict, Mval_metric_dict
                     IterEtest_metric_dict, IterMtest_metric_dict = Etest_metric_dict, Mtest_metric_dict
 
             logger.info(f'Best iter metrics, auc: {best_test_all[0]}, acc: {best_test_all[1]}')
 
             test_metric_indicator = []
-            for metric_name in Mtest_metrics.keys():
+            for metric_name in Etest_metrics.keys():
                 test_metric_indicator.append(
-                    (metric_name, Mtest_metrics[metric_name], True))
+                    (metric_name, Etest_metrics[metric_name], True))
             early_stop = early_stopping.step(
-                test_metric_indicator, nn.Sequential(Etrainer.model, Mtrainer.model), dataset_name=args.dataset_name)
+                test_metric_indicator, nn.Sequential(Mtrainer.model, Etrainer.model), dataset_name=args.dataset_name)
 
             if early_stop[0]:
                 break
@@ -685,7 +687,7 @@ def PTCL_2D(args, data):
             logger.removeHandler(ch)
 
         # save model result
-        save_results(args, Etrainer, IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict, run)
+        save_results(args, Mtrainer, IterEval_metric_dict, IterEtest_metric_dict, IterMval_metric_dict, IterMtest_metric_dict, run)
 
     return best_test_all
 
