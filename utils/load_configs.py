@@ -27,10 +27,10 @@ def get_link_prediction_args(is_evaluation: bool = False):
     parser.add_argument('--start_runs', type=int, default=0, help='number of runs of training starting')
 
     parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='yelp',
-                        choices=['oag','arxiv','bot22','wikipedia', 'reddit', 'mooc', 'lastfm','zhk','zhk2', 'yelp', 'bot','enron', 'SocialEvo', 'uci', 'Flights', 'CanParl', 'USLegis', 'UNtrade', 'UNvote', 'Contacts','dsub','dgraph'])
+                        choices=['oag', 'wikipedia', 'reddit', 'dsub'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--model_name', type=str, default='TGAT', help='name of the model, note that EdgeBank is only applicable for evaluation',
-                        choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', "M", 'EdgeBank', 'TCL', 'GraphMixer', 'DyGFormer'])
+                        choices=['TGAT', 'TGN', 'TCL', 'GraphMixer', 'DyGFormer'])
     parser.add_argument('--accelerate',default=False,help='wheather use the acceletate')
     parser.add_argument('--gpu', type=int, default=3, help='number of gpu to use')
     parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')
