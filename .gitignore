@@ -1,4 +1,4 @@
-processed_data/
+# processed_data/
 logs/
 process_data/
 saved_models/

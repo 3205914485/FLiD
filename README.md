@@ -68,7 +68,7 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     ```
 - **Data Preprocessing**
 
-    Use the `preprocess.ipynb` script to process the data. Or just skip the step if the dataset has been saved in `processed_data` 
+    Use the `preprocess.ipynb` script to process the data. Or just skip the step if the dataset has been saved in `processed_data`. We provide `wikipedia.zip` here.
     
 - **Training**
   - **Step 1: Warmup**

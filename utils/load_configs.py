@@ -180,7 +180,4 @@ def get_node_classification_em_args():
         parser.print_help()
         sys.exit()
 
-    if args.load_best_configs:
-        load_node_classification_best_configs(args=args)
-
     return args
