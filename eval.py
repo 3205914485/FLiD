@@ -301,7 +301,6 @@ if __name__ == "__main__":
         if args.dataset_name in ['oag']:
             if test_metrics['acc'] > best_metrics['acc']:
                 best_metrics = test_metrics
-                best_epoch = epoch
         else :
             if test_metrics['roc_auc'] > best_metrics['roc_auc']:
                 best_metrics = test_metrics

@@ -29,7 +29,7 @@ def evaluate_model_node_classification_m_step(model_name: str, model: nn.Module,
     :param time_gap: int, time gap for neighbors to compute node features
     :return:
     """
-    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'M', 'DyGFormer']:
+    if model_name in ['TGAT', 'TGN', 'TCL', 'GraphMixer', 'DyGFormer']:
         # evaluation phase use all the graph information
         model[0].set_neighbor_sampler(neighbor_sampler)
 
@@ -320,7 +320,7 @@ def m_step(Mtrainer: Trainer, Etrainer: Trainer, gt_weight, data, pseudo_labels,
             train_idx_data_loader_tqdm.set_description(
                 f'Epoch: {epoch + 1}, train for the {batch_idx + 1}-th batch, train loss: {loss.item()}')
 
-            if model_name in ['JODIE', 'DyRep', 'TGN']:
+            if model_name in ['TGN']:
                 # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
                 model[0].memory_bank.detach_memory_bank()
         train_total_loss /= (batch_idx + 1)
@@ -358,7 +358,7 @@ def m_step(Mtrainer: Trainer, Etrainer: Trainer, gt_weight, data, pseudo_labels,
                 f'Ground Truth validate {metric_name}, {val_metrics_gt[metric_name]:.4f}')
         # perform testing once after test_interval_epochs
         if (epoch + 1) % args.test_interval_epochs == 0:
-            if model_name in ['JODIE', 'DyRep', 'TGN']:
+            if model_name in ['TGN']:
                 # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
                 val_backup_memory_bank = model[0].memory_bank.backup_memory_bank(
                 )
@@ -377,7 +377,7 @@ def m_step(Mtrainer: Trainer, Etrainer: Trainer, gt_weight, data, pseudo_labels,
                                                                                                        double_way_datasets=double_way_datasets,
                                                                                                        time_gap=args.time_gap)
 
-            if model_name in ['JODIE', 'DyRep', 'TGN']:
+            if model_name in ['TGN']:
                 # reload validation memory bank for saving models
                 # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
                 model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
@@ -421,7 +421,7 @@ def m_step(Mtrainer: Trainer, Etrainer: Trainer, gt_weight, data, pseudo_labels,
     logger.info(f'get best performance on dataset {args.dataset_name}...')
 
     # the saved best model of memory-based models cannot perform validation since the stored memory has been updated by validation data
-    if model_name not in ['JODIE', 'DyRep', 'TGN']:
+    if model_name not in ['TGN']:
         val_total_loss, val_metric, val_metrics_gt = evaluate_model_node_classification_m_step(model_name=model_name,
                                                                                                model=model,
                                                                                                dataset=args.dataset_name,
@@ -454,9 +454,9 @@ def m_step(Mtrainer: Trainer, Etrainer: Trainer, gt_weight, data, pseudo_labels,
     # generating the embeddings
         # Loop through events and generate embeddings
     src_node_embeddings_list, dst_node_embeddings_list = [], []
-    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
+    if model_name in ['TGAT', 'TGN', 'TCL', 'GraphMixer', 'DyGFormer']:
         model[0].set_neighbor_sampler(full_neighbor_sampler)
-    if model_name in ['JODIE', 'DyRep', 'TGN']:
+    if model_name in ['TGN']:
         model[0].memory_bank.__init_memory_bank__()
 
     idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)

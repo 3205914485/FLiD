@@ -44,15 +44,6 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     | **Total classes**       | 2         | 2       | 2      | 5      |
   * Adaptive weight scheduling (`gt_weight` decay)
 
-- **Comprehensive Support**
-  ```python
-  # Flexible training workflows
-  for k in range(args.num_em_iters):
-      e_step(...)  # Expectation step
-      m_step(...)  # Maximization step
-      update_pseudo_labels(...)  # Label refinement
-  ```
-
 - **Research-Ready Infrastructure**
   - Automatic metric tracking (AUC/Accuracy)
   - Early stopping with model checkpointing
@@ -68,7 +59,7 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     ```
 - **Data Preprocessing**
 
-    Use the `preprocess.ipynb` script to process the data. Or just skip the step if the dataset has been saved in `processed_data`. We provide `wikipedia.zip` here.
+    Use the `preprocess.ipynb` script to process the data. Or just skip the step if the dataset has been saved in `processed_data`. Here we provide wikipedia.
     
 - **Training**
   - **Step 1: Warmup**
@@ -140,7 +131,6 @@ FLiD/
 ├── results/                   # Trainin results
 │   └── {method}/              # Per-method organization
 ├── saved_models/              # Model checkpoints
-├── process_data/              # Preprocess tools
 ├── processed_data/            # Preprocessed datasets
 │
 ├── PTCL/                      # Core EM implementation
@@ -182,12 +172,6 @@ Framework tracks multiple metrics through `log_and_save_metrics()`:
 }
 ```
 
-## 🤝 Contributing
-We welcome contributions! Please follow our [contribution guidelines](CONTRIBUTING.md) and:
-- Use consistent logging practices
-- Maintain backward compatibility
-- Add unit tests for new features
-
 ## 📜 Citation
 If using FLiD in your research, please cite:
 ```bibtex
@@ -200,3 +184,7 @@ If using FLiD in your research, please cite:
 
 ## License
 This project is licensed under the [MIT License](LICENSE).
+
+## 🙏 Acknowledgements
+
+This project makes use of the [DyGLib](https://github.com/yule-BUAA/DyGLib) library for dynamic graph learning. We sincerely thank the authors for providing a solid foundation and well-maintained codebase that greatly facilitated our research and development.

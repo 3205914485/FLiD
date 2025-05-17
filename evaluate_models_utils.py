@@ -15,7 +15,7 @@ from utils.utils import set_random_seed
 from utils.utils import NegativeEdgeSampler, NeighborSampler
 from utils.DataLoader import Data
 
-double_way_datasets = ['bot','bot22','dgraph','dsub','yelp','arxiv','oag']
+double_way_datasets = ['dsub','oag']
 
 def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader,
                                    evaluate_neg_edge_sampler: NegativeEdgeSampler, evaluate_data: Data, loss_func: nn.Module,
@@ -37,7 +37,7 @@ def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_s
     assert evaluate_neg_edge_sampler.seed is not None
     evaluate_neg_edge_sampler.reset_random_state()
 
-    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
+    if model_name in ['TGAT', 'TGN', 'TCL', 'GraphMixer', 'DyGFormer']:
         # evaluation phase use all the graph information
         model[0].set_neighbor_sampler(neighbor_sampler)
 
@@ -169,7 +169,7 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
     :param time_gap: int, time gap for neighbors to compute node features
     :return:
     """
-    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'M','DyGFormer']:
+    if model_name in ['TGAT', 'TGN', 'TCL', 'GraphMixer','DyGFormer']:
         # evaluation phase use all the graph information
         model[0].set_neighbor_sampler(neighbor_sampler)
 
@@ -258,24 +258,21 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
                 labels = torch.from_numpy(batch_labels).to(torch.long).to(predicts.device) 
                 mask = torch.from_numpy(batch_node_interact_times == batch_labels_times).to(torch.bool)
             
-            # 根据mask筛选出有效的预测和标签
+        
             filtered_predicts = predicts[mask]
             filtered_labels = labels[mask]
 
-            # 计算损失
-            if filtered_predicts.size(0) > 0:  # 确保有需要计算的样本
+            if filtered_predicts.size(0) > 0:
                 loss = loss_func(input=filtered_predicts, target=filtered_labels)
                 loss_value = loss.item()
             else:
-                loss = torch.tensor(0.0)  # 使用一个默认的损失值
+                loss = torch.tensor(0.0) 
                 loss_value = 0.0
 
-            # 更新损失和结果
             evaluate_total_loss += loss_value
             evaluate_y_trues.append(filtered_labels)
             evaluate_y_predicts.append(filtered_predicts)
 
-            # 更新进度条描述
             evaluate_idx_data_loader_tqdm.set_description(f'evaluate for the {batch_idx + 1}-th batch, evaluate loss: {loss_value}')
 
         evaluate_total_loss /= (batch_idx + 1)

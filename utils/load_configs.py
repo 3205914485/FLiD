@@ -96,7 +96,7 @@ def get_node_classification_em_args():
     parser = argparse.ArgumentParser('Interface for the node classification task With The EM algorithm')
 
     # Configuration of the experiment
-    parser.add_argument('--method', type=str, default='PTCL', choices=['PTCL', 'SEM', 'NPL' 'PTCL-2D'],help='Which method to be used to train')
+    parser.add_argument('--method', type=str, default='ptcl', choices=['ptcl', 'sem', 'npl', 'ptcl_2d'],help='Which method to be used to train')
     parser.add_argument('--double_way_datasets', type=list, default = ['dsub','oag'])
     parser.add_argument('--prefix',type=str, default='test', help='prefix of work')
     parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['oag', 'reddit','dsub', 'wikipedia'])

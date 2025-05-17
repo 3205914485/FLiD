@@ -46,10 +46,10 @@ def PTCL(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/train/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/train/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -219,10 +219,10 @@ def SEM(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/train/sem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/sem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/train/sem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/sem/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -397,10 +397,10 @@ def NPL(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/train/npl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/npl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/train/npl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/npl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -530,10 +530,10 @@ def PTCL_2D(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/train/ptcl_2d/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/ptcl_2d/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/train/ptcl_2d/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/ptcl_2d/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -737,13 +737,13 @@ if __name__ == "__main__":
         "ps_batch_mask": ps_batch_mask
     }
 
-    if args.method == 'PTCL':
+    if args.method == 'ptcl':
         best_test_all = PTCL(args, data)
-    elif args.method == 'SEM':
+    elif args.method == 'sem':
         best_test_all = SEM(args, data)
-    elif args.method == 'NPL':
+    elif args.method == 'npl':
         best_test_all = NPL(args, data)
-    elif args.method == 'PTCL-2D':
+    elif args.method == 'ptcl_2d':
         best_test_all = PTCL_2D(args, data)
     else:
         raise ValueError(f"Wrong value for method {args.method}!")

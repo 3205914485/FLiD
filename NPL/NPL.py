@@ -27,7 +27,7 @@ def evaluate_model_node_classification_npl(model_name: str, model: nn.Module, da
     :param time_gap: int, time gap for neighbors to compute node features
     :return:
     """
-    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'M', 'DyGFormer']:
+    if model_name in ['TGAT', 'TGN', 'TCL', 'GraphMixer', 'DyGFormer']:
         # evaluation phase use all the graph information
         model[0].set_neighbor_sampler(neighbor_sampler)
 
@@ -54,7 +54,7 @@ def evaluate_model_node_classification_npl(model_name: str, model: nn.Module, da
                     evaluate_data.node_interact_times[evaluate_data_indices], evaluate_data.edge_ids[evaluate_data_indices], pseudo_labels[0][evaluate_data_indices+offest], \
                     evaluate_data.labels[evaluate_data_indices], evaluate_data.labels_time[evaluate_data_indices]
 
-            if model_name in ['TGAT', 'CAWN', 'TCL']:
+            if model_name in ['TGAT', 'TCL']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
                 batch_src_node_embeddings, batch_dst_node_embeddings = \
@@ -62,7 +62,7 @@ def evaluate_model_node_classification_npl(model_name: str, model: nn.Module, da
                                                                       dst_node_ids=batch_dst_node_ids,
                                                                       node_interact_times=batch_node_interact_times,
                                                                       num_neighbors=num_neighbors)
-            elif model_name in ['JODIE', 'DyRep', 'TGN']:
+            elif model_name in ['TGN']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
                 batch_src_node_embeddings, batch_dst_node_embeddings = \
@@ -79,16 +79,6 @@ def evaluate_model_node_classification_npl(model_name: str, model: nn.Module, da
                     model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
                                                                       dst_node_ids=batch_dst_node_ids,
                                                                       node_interact_times=batch_node_interact_times,
-                                                                      num_neighbors=num_neighbors,
-                                                                      time_gap=time_gap)
-            elif model_name in ['M']:
-                # get temporal embedding of source and destination nodes
-                # two Tensors, with shape (batch_size, node_feat_dim)
-                batch_src_node_embeddings, batch_dst_node_embeddings = \
-                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                      dst_node_ids=batch_dst_node_ids,
-                                                                      node_interact_times=batch_node_interact_times,
-                                                                      message_idx=batch_edge_ids,
                                                                       num_neighbors=num_neighbors,
                                                                       time_gap=time_gap)
             elif model_name in ['DyGFormer']:
@@ -194,13 +184,11 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
     best_metrics, best_metrics_gt = {'roc_auc': 0.0, 'acc': 0.0}, {'roc_auc': 0.0, 'acc': 0.0}
     for epoch in range(args.num_epochs_npl):
         model.train()
-        if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
+        if model_name in ['TGAT', 'TGN', 'TCL', 'GraphMixer', 'DyGFormer']:
             # training process, set the neighbor sampler
             model[0].set_neighbor_sampler(full_neighbor_sampler)
-        if model_name in ["M"]:
-            model[0].set_neighbor_sampler(full_neighbor_sampler)
             # model[0].message_function.resetparameters()
-        if model_name in ['JODIE', 'DyRep', 'TGN']:
+        if model_name in ['TGN']:
             # reinitialize memory of memory-based models at the start of each epoch
             model[0].memory_bank.__init_memory_bank__()
 
@@ -222,7 +210,7 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
                     train_data.src_node_ids[train_data_indices], train_data.dst_node_ids[train_data_indices], train_data.node_interact_times[train_data_indices], \
                     train_data.edge_ids[train_data_indices], pseudo_labels[0][train_data_indices], train_data.labels_time[train_data_indices], ps_batch_mask[train_data_indices]
 
-            if model_name in ['TGAT', 'CAWN', 'TCL']:
+            if model_name in ['TGAT', 'TCL']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
                 batch_src_node_embeddings, batch_dst_node_embeddings = \
@@ -230,7 +218,7 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
                                                                       dst_node_ids=batch_dst_node_ids,
                                                                       node_interact_times=batch_node_interact_times,
                                                                       num_neighbors=args.num_neighbors)
-            elif model_name in ['JODIE', 'DyRep', 'TGN']:
+            elif model_name in ['TGN']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
                 batch_src_node_embeddings, batch_dst_node_embeddings = \
@@ -241,15 +229,6 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
                                                                       edges_are_positive=True,
                                                                       num_neighbors=args.num_neighbors)
             elif model_name in ['GraphMixer']:
-                # get temporal embedding of source and destination nodes
-                # two Tensors, with shape (batch_size, node_feat_dim)
-                batch_src_node_embeddings, batch_dst_node_embeddings = \
-                    model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
-                                                                      dst_node_ids=batch_dst_node_ids,
-                                                                      node_interact_times=batch_node_interact_times,
-                                                                      num_neighbors=args.num_neighbors,
-                                                                      time_gap=args.time_gap)
-            elif model_name in ['M']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
                 batch_src_node_embeddings, batch_dst_node_embeddings = \
@@ -330,7 +309,7 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
             train_idx_data_loader_tqdm.set_description(
                 f'Epoch: {epoch + 1}, train for the {batch_idx + 1}-th batch, train loss: {loss.item()}')
 
-            if model_name in ['JODIE', 'DyRep', 'TGN']:
+            if model_name in ['TGN']:
                 # detach the memories and raw messages of nodes in the memory bank after each batch, so we don't back propagate to the start of time
                 model[0].memory_bank.detach_memory_bank()
         train_total_loss /= (batch_idx + 1)
@@ -368,7 +347,7 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
                 f'Ground Truth validate {metric_name}, {val_metrics_gt[metric_name]:.4f}')
         # perform testing once after test_interval_epochs
         if (epoch + 1) % args.test_interval_epochs == 0:
-            if model_name in ['JODIE', 'DyRep', 'TGN']:
+            if model_name in ['TGN']:
                 # backup memory bank after validating so it can be used for testing nodes (since test edges are strictly later in time than validation edges)
                 val_backup_memory_bank = model[0].memory_bank.backup_memory_bank(
                 )
@@ -387,7 +366,7 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
                                                                                                        double_way_datasets=double_way_datasets,
                                                                                                        time_gap=args.time_gap)
 
-            if model_name in ['JODIE', 'DyRep', 'TGN']:
+            if model_name in ['TGN']:
                 # reload validation memory bank for saving models
                 # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
                 model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
@@ -405,7 +384,7 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
                 (metric_name, test_metrics_gt[metric_name], True))
         early_stop = early_stopping.step(test_metric_gt_indicator, model, dataset_name=args.dataset_name)
 
-        if args.dataset_name in ['arxiv','oag']:
+        if args.dataset_name in ['oag']:
             if test_metrics['acc'] > best_metrics['acc']:
                 best_metrics = test_metrics
             if test_metrics_gt['acc'] > best_metrics_gt['acc']:
@@ -432,7 +411,7 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
     logger.info(f'get best performance on dataset {args.dataset_name}...')
 
     # the saved best model of memory-based models cannot perform validation since the stored memory has been updated by validation data
-    if model_name not in ['JODIE', 'DyRep', 'TGN']:
+    if model_name not in ['TGN']:
         val_total_loss, val_metric, val_metrics_gt = evaluate_model_node_classification_npl(model_name=model_name,
                                                                                                model=model,
                                                                                                dataset=args.dataset_name,
@@ -468,9 +447,9 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
     best_epoch = 0
     logger.info("Loop through all events to generate pseudo labels\n ")
 
-    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer']:
+    if model_name in ['TGAT', 'TGN', 'TCL', 'GraphMixer', 'DyGFormer']:
         model[0].set_neighbor_sampler(full_neighbor_sampler)
-    if model_name in ['JODIE', 'DyRep', 'TGN']:
+    if model_name in ['TGN']:
         model[0].memory_bank.__init_memory_bank__()
 
     idx_data_loader_tqdm = tqdm(full_idx_data_loader, ncols=120)
@@ -481,13 +460,13 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
             full_data.edge_ids[data_indices]
 
         with torch.no_grad():
-            if model_name in ['TGAT', 'CAWN', 'TCL']:
+            if model_name in ['TGAT', 'TCL']:
                 batch_src_node_embeddings, batch_dst_node_embeddings = \
                     model[0].compute_src_dst_node_temporal_embeddings(src_node_ids=batch_src_node_ids,
                                                                       dst_node_ids=batch_dst_node_ids,
                                                                       node_interact_times=batch_node_interact_times,
                                                                       num_neighbors=args.num_neighbors)
-            elif model_name in ['JODIE', 'DyRep', 'TGN']:
+            elif model_name in ['TGN']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
                 batch_src_node_embeddings, batch_dst_node_embeddings = \

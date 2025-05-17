@@ -22,7 +22,7 @@ class EarlyStopping(object):
         self.logger = logger
         self.save_model_path = os.path.join(save_model_folder, f"{save_model_name}.pkl")
         self.model_name = model_name
-        if self.model_name in ['JODIE', 'DyRep', 'TGN']:
+        if self.model_name in ['TGN']:
             # path to additionally save the nonparametric data (e.g., tensors) in memory-based models (e.g., JODIE, DyRep, TGN)
             self.save_model_nonparametric_data_path = os.path.join(save_model_folder, f"{save_model_name}_nonparametric_data.pkl")
 
@@ -47,7 +47,7 @@ class EarlyStopping(object):
                     metrics_compare_results.append(True)
                 else:
                     metrics_compare_results.append(False)
-        if dataset_name in ['arxiv', 'oag']:
+        if dataset_name in ['oag']:
             if metrics_compare_results[1]: # means acc
                 for metric_tuple in metrics:
                     metric_name, metric_value = metric_tuple[0], metric_tuple[1]
