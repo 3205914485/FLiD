@@ -3,15 +3,15 @@ from models.MemoryModel import MemoryModel, compute_src_dst_node_time_shifts
 from models.TCL import TCL
 from models.GraphMixer import GraphMixer
 from models.DyGFormer import DyGFormer
-from models.modules import MLPClassifier, MLPClassifier_BN, DeeperMLPClassifier, FeatureTransformerDecoder
+from models.modules import MLPClassifier, MLPClassifier_BN
 from utils.utils import convert_to_gpu
 from torch import nn
 from PTCL.trainer import Trainer
 
 
-def em_init(args, node_raw_features, edge_raw_features, train_data, full_neighbor_sampler, logger):
+def Temc_init(args, node_raw_features, edge_raw_features, train_data, full_neighbor_sampler, logger):
     r"""
-        Initialize E and M models
+        Initialize Temc Models
         Args:
             args: arguments for the model
             node_raw_features: node raw features
@@ -20,10 +20,9 @@ def em_init(args, node_raw_features, edge_raw_features, train_data, full_neighbo
             full_neighbor_sampler: neighbor sampler
             logger: logger
         Returns:
-            Mtrainer: M model trainer
-            Etrainer: E model trainer    
+            Dirtrainer: Temc trainer
     """
-    # create mmodel
+    # create Emodel
     if args.mmodel_name == 'TGAT':
         dynamic_backbone = TGAT(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features, neighbor_sampler=full_neighbor_sampler,
                                 time_feat_dim=args.time_feat_dim, num_layers=args.num_layers, num_heads=args.num_heads, dropout=args.dropout, device=args.device)
@@ -53,38 +52,18 @@ def em_init(args, node_raw_features, edge_raw_features, train_data, full_neighbo
 
         # create Mmodel
     if args.emodel_name == 'mlp':
-        node_classifier1 = MLPClassifier(
+        node_classifier = MLPClassifier(
             input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier2 = MLPClassifier(
-            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier = nn.ModuleList([node_classifier1, node_classifier2])
     elif args.emodel_name =='mlp_bn':
-        node_classifier1 = MLPClassifier_BN(
+        node_classifier = MLPClassifier_BN(
             input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier2 = MLPClassifier_BN(
-            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier = nn.ModuleList([node_classifier1, node_classifier2])     
-    elif args.emodel_name =='mlp_deep':
-        node_classifier1 = DeeperMLPClassifier(
-            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier2 = DeeperMLPClassifier(
-            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier = nn.ModuleList([node_classifier1, node_classifier2])          
-    elif args.emodel_name =='transformer':
-        node_classifier1 = FeatureTransformerDecoder(
-            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier2 = FeatureTransformerDecoder(
-            input_dim=node_raw_features.shape[1], dropout=args.dropout, num_classes=args.num_classes)
-        node_classifier = nn.ModuleList([node_classifier1, node_classifier2]) 
     else:
         raise ValueError(f"Wrong value for emodel_name {args.emodel_name}!")
-
+     
     dynamic_backbone = convert_to_gpu(dynamic_backbone, device=args.device)
     node_classifier = convert_to_gpu(node_classifier, device=args.device)
 
-    Mtrainer = Trainer(args=args, model=dynamic_backbone,
+    Dirtrainer = Trainer(args=args, model=nn.Sequential(dynamic_backbone,node_classifier),
                        model_name=args.mmodel_name, logger=logger)
-    Etrainer = Trainer(args=args, model=node_classifier,
-                       model_name=args.emodel_name, logger=logger)
 
-    return Mtrainer, Etrainer
+    return Dirtrainer

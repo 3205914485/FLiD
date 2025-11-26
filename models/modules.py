@@ -122,6 +122,77 @@ class MLPClassifier_BN(nn.Module):
         x = self.dropout(self.act(self.bn2(self.fc2(x))))
         return self.fc3(x)
 
+class ResidualBlock(nn.Module):
+    def __init__(self, dim, dropout=0.1):
+        super().__init__()
+        self.linear1 = nn.Linear(dim, dim)
+        self.bn1 = nn.BatchNorm1d(dim)
+        self.linear2 = nn.Linear(dim, dim)
+        self.bn2 = nn.BatchNorm1d(dim)
+        self.dropout = nn.Dropout(dropout)
+        self.act = nn.ReLU()
+
+    def forward(self, x):
+        residual = x
+        out = self.act(self.bn1(self.linear1(x)))
+        out = self.dropout(out)
+        out = self.bn2(self.linear2(out))
+        out += residual  # residual connection
+        out = self.act(out)
+        return out
+
+class DeeperMLPClassifier(nn.Module):
+    def __init__(self, input_dim: int, hidden_dim: int = 256, num_layers: int = 3, num_classes: int = 2, dropout: float = 0.1):
+        """
+        Deeper MLP with residual blocks and batch normalization.
+        """
+        super().__init__()
+        self.input_proj = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout)
+        )
+
+        self.blocks = nn.Sequential(*[
+            ResidualBlock(hidden_dim, dropout=dropout) for _ in range(num_layers)
+        ])
+
+        self.classifier = nn.Linear(hidden_dim, num_classes)
+
+    def forward(self, x: torch.Tensor):
+        x = self.input_proj(x)
+        x = self.blocks(x)
+        return self.classifier(x)
+
+class FeatureTransformerDecoder(nn.Module):
+    def __init__(self, input_dim: int, num_classes: int = 2, d_model: int = 64,
+                 num_heads: int = 4, num_layers: int = 2, dropout: float = 0.1):
+        super().__init__()
+        assert input_dim >= d_model, "input_dim must be >= d_model"
+
+        self.proj = nn.Linear(1, d_model)  # project each feature scalar to vector
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=num_heads, dim_feedforward=4*d_model, dropout=dropout, batch_first=True
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        self.pool = nn.AdaptiveAvgPool1d(1)  # pool over feature-dim
+        self.classifier = nn.Linear(d_model, num_classes)
+
+    def forward(self, x: torch.Tensor):
+        """
+        x: Tensor of shape (num_nodes, feature_dim)
+        """
+        B, F = x.shape
+        x = x.unsqueeze(-1)  # (B, F, 1)
+        x = self.proj(x)     # (B, F, d_model)
+        x = self.encoder(x)  # (B, F, d_model)
+        x = x.transpose(1, 2)  # (B, d_model, F)
+        x = self.pool(x).squeeze(-1)  # (B, d_model)
+        return self.classifier(x)
+
 
 class MultiHeadAttention(nn.Module):
 

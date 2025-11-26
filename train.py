@@ -28,6 +28,9 @@ from SEM.M_step import sem_m_step
 from NPL.NPL import NPL_train
 from NPL.NPL_init import NPL_init
 
+from Temc.Temc import Temc_train
+from Temc.Temc_init import Temc_init
+
 cpu_num = 2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
 os.environ["MKL_NUM_THREADS"] = str(cpu_num)  # noqa
@@ -516,6 +519,138 @@ def NPL(args, data):
         # No E-step for NPL
     return best_test_all
 
+def Temc(args, data):
+
+    for run in range(args.start_runs, args.end_runs):
+
+        set_random_seed(seed=run)
+
+        args.seed = run
+
+        # set up logger
+        logging.basicConfig(level=logging.INFO)
+        logger = logging.getLogger()
+        logger.setLevel(logging.DEBUG)
+        os.makedirs(
+            f"./logs/temc/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+        # create file handler that logs debug and higher level messages
+        fh = logging.FileHandler(
+            f"./logs/temc/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+        fh.setLevel(logging.DEBUG)
+        # create console handler with a higher log level
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.WARNING)
+        # create formatter and add it to the handlers
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        fh.setFormatter(formatter)
+        ch.setFormatter(formatter)
+        # add the handlers to logger
+        logger.addHandler(fh)
+        logger.addHandler(ch)
+
+        run_start_time = time.time()
+        logger.info(f"********** Run {run + 1} starts. **********")
+
+        logger.info(f'configuration is {args}')
+
+        # PTCL strating:
+
+        # EM data:
+        pseudo_labels_save_path = f"processed_data/{args.dataset_name}/temc/pseudo_labels/{args.emodel_name}/{args.seed}/"
+
+        if args.dataset_name in args.double_way_datasets:
+            pseudo_labels = torch.zeros(
+                2, num_interactions, device=args.device)
+        else:
+            pseudo_labels = torch.zeros(
+                1, num_interactions, device=args.device)
+        pseudo_labels_store = []
+        temc_val_metric_dict, temc_test_metric_dict = {}, {}
+       
+        # EM Warmup
+        Dirtrainer = Temc_init(args=args,
+                                     logger=logger,
+                                     train_data=train_data,
+                                     node_raw_features=node_raw_features,
+                                     edge_raw_features=edge_raw_features,
+                                     full_neighbor_sampler=full_neighbor_sampler
+                                     )
+
+        model_name = Dirtrainer.model_name
+        save_model_name = f'temc_{model_name}'
+        save_model_folder = f"./saved_models/temc/whole/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+        shutil.rmtree(save_model_folder, ignore_errors=True)
+        os.makedirs(save_model_folder, exist_ok=True)
+        early_stopping = EarlyStopping(patience=args.iter_patience, save_model_folder=save_model_folder,
+                                       save_model_name=save_model_name, logger=logger, model_name=model_name)
+
+        Itertemc_val_metric_dict, Itertemc_test_metric_dict= {}, {}
+        best_test_all = [0.0,0.0]
+        # update first to get the ground truth for pseudo labels
+        pseudo_labels = update_pseudo_labels(
+            data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, mode=args.mode, first=True, ps_filter='none',\
+            double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive, threshold=args.filter_threshold)
+        # set the ps_filter to none cause no warmup for getting the pseudo_labels_store
+        for k in range(args.num_iters):
+            logger.info(f'temc train Iter {k + 1} starts.\n')
+            if args.gt_weight != 1.0 and k != 0:
+                gt_weight = 0.1 + (args.gt_weight - 0.1) * np.exp(-args.alpha * k)
+            else:
+                gt_weight = 1.0
+
+            temc_val_Loss, temc_val_metrics, temc_test_loss, temc_test_metrics = \
+                Temc_train(args=args, gt_weight=gt_weight, data=data, logger=logger, Dirtrainer=Dirtrainer, iter_num=k,
+                pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store)
+
+            pseudo_labels = update_pseudo_labels(
+                data=data, pseudo_labels=pseudo_labels, pseudo_labels_store=pseudo_labels_store, save_path=pseudo_labels_save_path, mode=args.mode, ps_filter=args.ps_filter,\
+                double_way_dataset=args.double_way_datasets, use_transductive=args.use_transductive,save=args.save_pseudo_labels, iter_num=k, threshold=args.filter_threshold)
+            
+            if Dirtrainer.model_name not in ['TGN']:
+                log_and_save_metrics(
+                    logger, 'temc', temc_val_Loss, temc_val_metrics, temc_val_metric_dict, 'validate')
+            log_and_save_metrics(
+                logger, 'temc', temc_test_loss, temc_test_metrics, temc_test_metric_dict, 'test')
+
+            if args.dataset_name in ['oag']:
+                if list(temc_test_metrics.values())[1] > best_test_all[1]:
+                    best_test_all = list(temc_test_metrics.values())
+                    if Dirtrainer.model_name not in ['TGN']:
+                        Itertemc_val_metric_dict = temc_val_metric_dict
+                    Itertemc_test_metric_dict = temc_test_metric_dict
+            else :
+                if list(temc_test_metrics.values())[0] > best_test_all[0]:
+                    best_test_all = list(temc_test_metrics.values())
+                    if Dirtrainer.model_name not in ['TGN']:
+                        Itertemc_val_metric_dict = temc_val_metric_dict
+                    Itertemc_test_metric_dict = temc_test_metric_dict 
+
+            logger.info(f'Best iter metrics, auc: {best_test_all[0]}, acc: {best_test_all[1]},')
+
+            test_metric_indicator = []
+            for metric_name in temc_test_metrics.keys():
+                test_metric_indicator.append(
+                    (metric_name, temc_test_metrics[metric_name], True))
+            early_stop = early_stopping.step(
+                test_metric_indicator, Dirtrainer.model, dataset_name=args.dataset_name)
+
+            if early_stop[0]:
+                break
+
+        single_run_time = time.time() - run_start_time
+        logger.info(f'Run {run + 1} cost {single_run_time:.2f} seconds.')
+
+        # avoid the overlap of logs
+        if run < args.end_runs - 1:
+            logger.removeHandler(fh)
+            logger.removeHandler(ch)
+
+        # save model result
+        save_results(args, Dirtrainer, [], [], Itertemc_val_metric_dict, Itertemc_test_metric_dict, run)
+        # No E-step for temc
+    return best_test_all
+
 def PTCL_2D(args, data):
     
     args.decoder = 2
@@ -743,6 +878,8 @@ if __name__ == "__main__":
         best_test_all = SEM(args, data)
     elif args.method == 'npl':
         best_test_all = NPL(args, data)
+    elif args.method == 'temc':
+        best_test_all = Temc(args, data)
     elif args.method == 'ptcl_2d':
         best_test_all = PTCL_2D(args, data)
     else:

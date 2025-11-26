@@ -66,7 +66,7 @@ def prob_filter(ps_labels, ps_labels_store, threshold=0.6):
     print(f'Probability Filtering: {sum(probs<=threshold)/ps_labels.shape[1]:.2f}')
     return ps_labels   
 
-def update_pseudo_labels(data, pseudo_labels, pseudo_labels_store, double_way_dataset, mode, \
+def update_pseudo_labels(data, pseudo_labels, pseudo_labels_store, double_way_dataset, mode, first=False, \
                          use_transductive=0, save=False, save_path=0, threshold=0.6, iter_num=-1, ps_filter='none'):
 
     if save:
@@ -74,12 +74,14 @@ def update_pseudo_labels(data, pseudo_labels, pseudo_labels_store, double_way_da
         torch.save(pseudo_labels, os.path.join(save_path, f'raw_{iter_num}.pt'))  
     else :
         pass
-
-    if ps_filter == 'entropy':
-        pseudo_labels = entropy_filter(pseudo_labels, pseudo_labels_store, threshold=threshold)
-    elif ps_filter == 'probability':
-        pseudo_labels = prob_filter(pseudo_labels, pseudo_labels_store, threshold=threshold)   
-    else: 
+    if not first:
+        if ps_filter == 'entropy':
+            pseudo_labels = entropy_filter(pseudo_labels, pseudo_labels_store, threshold=threshold)
+        elif ps_filter == 'probability':
+            pseudo_labels = prob_filter(pseudo_labels, pseudo_labels_store, threshold=threshold)   
+        else: 
+            pass
+    else:
         pass
 
     true_labels = data['full_data'].labels

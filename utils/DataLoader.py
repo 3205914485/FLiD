@@ -236,7 +236,7 @@ def get_PTCL_data(dataset_name: str, val_ratio: float, test_ratio: float ,is_pre
             full_data, train_data, val_data, test_data, num_interactions, num_node_features (Data object)
     """
     # Load data and train val test split
-    elif dataset_name in ['oag']:
+    if dataset_name in ['oag']:
         NODE_FEAT_DIM = 384
         EDGE_FEAT_DIM = 384
         graph_df = pd.read_csv('./processed_data/{}/ml_{}.csv'.format(dataset_name, dataset_name))

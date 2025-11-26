@@ -96,7 +96,7 @@ def get_node_classification_em_args():
     parser = argparse.ArgumentParser('Interface for the node classification task With The EM algorithm')
 
     # Configuration of the experiment
-    parser.add_argument('--method', type=str, default='ptcl', choices=['ptcl', 'sem', 'npl', 'ptcl_2d'],help='Which method to be used to train')
+    parser.add_argument('--method', type=str, default='ptcl', choices=['ptcl', 'sem', 'npl', 'temc', 'ptcl_2d'],help='Which method to be used to train')
     parser.add_argument('--double_way_datasets', type=list, default = ['dsub','oag'])
     parser.add_argument('--prefix',type=str, default='test', help='prefix of work')
     parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['oag', 'reddit','dsub', 'wikipedia'])
@@ -104,7 +104,7 @@ def get_node_classification_em_args():
     parser.add_argument('--mmodel_name', type=str, default='TGAT', help='name of the model of dyg backbone',
                         choices=['TGAT', 'TGN','TCL', 'GraphMixer', 'DyGFormer'])
     parser.add_argument('--emodel_name', type=str, default='mlp', help='name of the model of decoder',
-                        choices=['mlp','mlp_bn'])    
+                        choices=['mlp','mlp_bn','mlp_deep','transformer'])    
     parser.add_argument('--gpu', type=int, default=0, help='number of gpu to use')
     parser.add_argument('--save_pseudo_labels', type=int, default=0, help='Whether save the pseudo labels')   
     parser.add_argument('--mode', type=str, default='ps', choices=['ps','gt'], help='which label to use')   
@@ -131,9 +131,9 @@ def get_node_classification_em_args():
     # warmup:
     parser.add_argument('--warmup_e_train', type=int, default=1, help='Whether Train the warmup E model')
     parser.add_argument('--warmup_m_train', type=int, default=1, help='Whether Train the warmup M model')
-    parser.add_argument('--num_epochs_e_warmup', type=int, default=1, help='number of epochs of warmup for E step(LinkPrediction)')
-    parser.add_argument('--num_epochs_m_warmup', type=int, default=2, help='number of epochs of warmup for M step(NodeClassification)')
-    parser.add_argument('--mw_patience', type=int, default=20, help='patience specific for m_warmup')   
+    parser.add_argument('--num_epochs_e_warmup', type=int, default=100, help='number of epochs of warmup for E step(LinkPrediction)')
+    parser.add_argument('--num_epochs_m_warmup', type=int, default=100, help='number of epochs of warmup for M step(NodeClassification)')
+    parser.add_argument('--ew_patience', type=int, default=20, help='patience specific for e_warmup')   
 
     # EM-Iter settings:
     parser.add_argument('--ps_filter', type=str, default='none', help='Whether filter the pseudo labels by entropy or probability')
@@ -152,9 +152,11 @@ def get_node_classification_em_args():
     parser.add_argument('--patience', type=int, default=15, help='patience for early stopping')
     parser.add_argument('--num_em_iters', type=int, default=1, help='number of EM iters')
     parser.add_argument('--num_iters', type=int, default=30, help='number of iters for npl')
-    parser.add_argument('--num_epochs_e_step', type=int, default=1, help='number of epochs of E step')
-    parser.add_argument('--num_epochs_m_step', type=int, default=1, help='number of epochs of M step')
-    parser.add_argument('--num_epochs_npl', type=int, default=1, help='number of epochs of npl train')
+    parser.add_argument('--num_epochs_e_step', type=int, default=50, help='number of epochs of E step')
+    parser.add_argument('--num_epochs_m_step', type=int, default=50, help='number of epochs of M step')
+    parser.add_argument('--num_epochs_npl', type=int, default=50, help='number of epochs of npl train')
+    parser.add_argument('--num_epochs_temc', type=int, default=50, help='number of epochs of temc train')
+    parser.add_argument('--consistency_weight', type=float, default=0.1, help='Weight for the temporal consistency loss')
     # Model specific settings:
 
     parser.add_argument('--num_walk_heads', type=int, default=8, help='number of heads used for the attention in walk encoder')

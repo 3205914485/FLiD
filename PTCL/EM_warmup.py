@@ -45,8 +45,8 @@ def em_warmup(args, data, logger, Mtrainer: Trainer, Etrainer: Trainer, src_node
             logger=logger,
             Mtrainer=Mtrainer,
             Etrainer=Etrainer,
-            train=args.warmup_m_train,
-            patience=args.mw_patience,
+            train=args.warmup_e_train,
+            patience=args.ew_patience,
             pseudo_labels=pseudo_labels,
             pseudo_labels_store=pseudo_labels_store,
             save_model_folder=save_model_folder,
@@ -109,7 +109,7 @@ def link_prediction(args, Mtrainer, data, logger):
 
     # Considering the link_prediction loss is not the same as the node_classification task of m/e trainer , so here we directly use BCEloss()
     loss_func = nn.BCELoss()
-    if args.warmup_e_train:
+    if args.warmup_m_train:
         for epoch in range(args.num_epochs_e_warmup):
 
             model.train()

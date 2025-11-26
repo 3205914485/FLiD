@@ -85,7 +85,7 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     - `method`: Choose the training method (e.g., `ptcl`, `sem`, `npl`)
     - `dataset_name`: Choose the dataset (e.g., `reddit`, `wikipedia`, `oag`)
     - `gt_weight`: gourd-truth label weight ($\beta$ in the paper) (e.g., `0.5`)
-    - `alphas`: Exp decay for Temporal Curriculum learning ($\gamma$ in the paper)(e.g., `0.1`)
+    - `alpha`: Exp decay for Temporal Curriculum learning ($\gamma$ in the paper)(e.g., `0.1`)
     - `gpus`: Specify the GPUs to use (e.g., `0`)
     - `warmup_m_train`: warmup-train-backbone (e.g., `0`)
     - `warmup_e_train`: warmup-train-decoder (e.g., `0`)
