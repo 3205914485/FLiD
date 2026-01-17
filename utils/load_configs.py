@@ -96,7 +96,7 @@ def get_node_classification_em_args():
     parser = argparse.ArgumentParser('Interface for the node classification task With The EM algorithm')
 
     # Configuration of the experiment
-    parser.add_argument('--method', type=str, default='ptcl', choices=['ptcl', 'sem', 'npl', 'temc', 'ptcl_2d'],help='Which method to be used to train')
+    parser.add_argument('--method', type=str, default='ptcl', choices=['ptcl', 'sem', 'npl', 'temc', 'ptcl_2d', 'sad'],help='Which method to be used to train')
     parser.add_argument('--double_way_datasets', type=list, default = ['dsub','oag'])
     parser.add_argument('--prefix',type=str, default='test', help='prefix of work')
     parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['oag', 'reddit','dsub', 'wikipedia'])
@@ -157,6 +157,19 @@ def get_node_classification_em_args():
     parser.add_argument('--num_epochs_npl', type=int, default=50, help='number of epochs of npl train')
     parser.add_argument('--num_epochs_temc', type=int, default=50, help='number of epochs of temc train')
     parser.add_argument('--consistency_weight', type=float, default=0.1, help='Weight for the temporal consistency loss')
+    parser.add_argument('--num_epochs_sad', type=int, default=30, help='number of epochs of SAD train')
+    parser.add_argument('--sad_mode', type=str, default='sad', choices=['sad', 'gdn'], help='SAD loss composition')
+    parser.add_argument('--sad_module_type', type=str, default='graph_attention', choices=['graph_attention', 'graph_sum'], help='SAD encoder aggregation type')
+    parser.add_argument('--sad_hidden_dim', type=int, default=128, help='hidden dimension for SAD encoder')
+    parser.add_argument('--sad_num_heads', type=int, default=2, help='attention heads for SAD encoder')
+    parser.add_argument('--sad_num_layers', type=int, default=2, help='network layers for SAD encoder')
+    parser.add_argument('--sad_dropout', type=float, default=0.2, help='dropout for SAD encoder')
+    parser.add_argument('--sad_anomaly_alpha', type=float, default=1e-1, help='anomaly loss weight for SAD')
+    parser.add_argument('--sad_supc_alpha', type=float, default=5e-3, help='supervised contrastive loss weight for SAD')
+    parser.add_argument('--sad_memory_size', type=int, default=5000, help='memory size for SAD deviation module')
+    parser.add_argument('--sad_sample_size', type=int, default=2000, help='sample size for SAD deviation module')
+    parser.add_argument('--sad_learning_rate', type=float, default=None, help='learning rate override for SAD')
+    parser.add_argument('--sad_batch_size', type=int, default=None, help='batch size override for SAD')
     # Model specific settings:
 
     parser.add_argument('--num_walk_heads', type=int, default=8, help='number of heads used for the attention in walk encoder')

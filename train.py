@@ -30,6 +30,7 @@ from NPL.NPL_init import NPL_init
 
 from Temc.Temc import Temc_train
 from Temc.Temc_init import Temc_init
+from SAD.sad_flid import run_sad
 
 cpu_num = 2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
@@ -882,6 +883,8 @@ if __name__ == "__main__":
         best_test_all = Temc(args, data)
     elif args.method == 'ptcl_2d':
         best_test_all = PTCL_2D(args, data)
+    elif args.method == 'sad':
+        best_test_all = run_sad(args, data)
     else:
         raise ValueError(f"Wrong value for method {args.method}!")
 
