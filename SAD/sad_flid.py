@@ -46,6 +46,7 @@ class SADTemporalDataset(Dataset):
         n_layers: int,
         n_neighbors: int,
         double_labels: bool,
+        dataset_name: str,
     ):
         super().__init__()
         self.full_data = full_data
@@ -54,6 +55,7 @@ class SADTemporalDataset(Dataset):
         self.n_layers = n_layers
         self.n_neighbors = n_neighbors
         self.double_labels = double_labels
+        self.dataset_name = dataset_name.lower()
 
         raw = SimpleNamespace(
             sources=full_data.src_node_ids,
@@ -75,11 +77,15 @@ class SADTemporalDataset(Dataset):
                 label = labels_src[idx]
                 label_time = times_src[idx]
                 effective_label = label if ts == label_time else -1
+                if self.dataset_name in ["dsub", "dsub1m", "oag"] and label not in [0, 1]:
+                    effective_label = -1
                 samples.append((int(self.full_data.src_node_ids[idx]), float(ts), float(effective_label)))
                 # destination node
                 label = labels_dst[idx]
                 label_time = times_dst[idx]
                 effective_label = label if ts == label_time else -1
+                if self.dataset_name in ["dsub", "dsub1m", "oag"] and label not in [0, 1]:
+                    effective_label = -1
                 samples.append((int(self.full_data.dst_node_ids[idx]), float(ts), float(effective_label)))
         else:
             labels = self.full_data.labels
@@ -89,6 +95,8 @@ class SADTemporalDataset(Dataset):
                 label = labels[idx]
                 label_time = labels_time[idx]
                 effective_label = label if ts == label_time else -1
+                if self.dataset_name in ["dsub", "dsub1m", "oag"] and label not in [0, 1]:
+                    effective_label = -1
                 samples.append((int(self.full_data.src_node_ids[idx]), float(ts), float(effective_label)))
         return samples
 
@@ -219,7 +227,7 @@ class SADCollate:
 def sad_criterion(prediction_dict, labels, model, config: SADConfig, device):
     mask = labels > -1
     if mask.sum() == 0:
-        zero = torch.tensor(0.0, device=device)
+        zero = torch.zeros(1, device=device, requires_grad=True)
         return zero, zero, zero, zero
 
     filtered = {
@@ -246,7 +254,7 @@ def sad_criterion(prediction_dict, labels, model, config: SADConfig, device):
     return loss, loss_classify, loss_anomaly, loss_supc
 
 
-def sad_eval_epoch(data_loader, model, config: SADConfig, device):
+def sad_eval_epoch(data_loader, model, config: SADConfig, device, dataset_name: str = ""):
     loss_values, all_probs, all_labels = [], [], []
     model.eval()
     with torch.no_grad():
@@ -280,11 +288,13 @@ def sad_eval_epoch(data_loader, model, config: SADConfig, device):
     labels = torch.cat(all_labels)
     labels_np = labels.numpy()
     probs_np = probs.numpy()
-    if len(np.unique(labels_np)) > 1:
-        roc_auc = roc_auc_score(labels_np, probs_np)
-    else:
-        roc_auc = 0.0
+    unique_labels = np.unique(labels_np)
     acc = accuracy_score(labels_np, (probs_np >= 0.5).astype(int))
+
+    roc_auc = 0.0
+    if len(unique_labels) > 1 and set(unique_labels).issubset({0, 1}) and dataset_name.lower() not in ["oag"]:
+        roc_auc = roc_auc_score(labels_np, probs_np)
+
     loss_value = float(np.mean(loss_values)) if loss_values else 0.0
     return {"roc_auc": roc_auc, "acc": acc, "loss": loss_value}
 
@@ -292,7 +302,12 @@ def sad_eval_epoch(data_loader, model, config: SADConfig, device):
 def run_sad(args, data):
     best_test_all = [0.0, 0.0]
     double_way_datasets = args.double_way_datasets
-    device = torch.device(args.device if torch.cuda.is_available() or "cpu" in args.device else "cpu")
+    if torch.cuda.is_available():
+        visible_devices = torch.cuda.device_count()
+        target_idx = min(args.gpu, max(visible_devices - 1, 0))
+        device = torch.device(f"cuda:{target_idx}")
+    else:
+        device = torch.device("cpu")
 
     node_feat_dim = data["node_raw_features"].shape[1]
     config = SADConfig(
@@ -351,6 +366,7 @@ def run_sad(args, data):
             n_layers=config.n_layer,
             n_neighbors=config.n_neighbors,
             double_labels=double_labels,
+            dataset_name=data["dataset_name"],
         )
         val_dataset = SADTemporalDataset(
             full_data=full_data,
@@ -360,6 +376,7 @@ def run_sad(args, data):
             n_layers=config.n_layer,
             n_neighbors=config.n_neighbors,
             double_labels=double_labels,
+            dataset_name=data["dataset_name"],
         )
         test_dataset = SADTemporalDataset(
             full_data=full_data,
@@ -369,6 +386,7 @@ def run_sad(args, data):
             n_layers=config.n_layer,
             n_neighbors=config.n_neighbors,
             double_labels=double_labels,
+            dataset_name=data["dataset_name"],
         )
 
         collate = SADCollate(node_features=data["node_raw_features"])
@@ -422,7 +440,15 @@ def run_sad(args, data):
                         batch_sample["labels"].to(device),
                     )
                     y = batch_sample["labels"].to(device)
+                    if (y > -1).sum() == 0:
+                        t.set_postfix(skip="no_valid_labels")
+                        t.update(1)
+                        continue
                     loss, loss_classify, loss_anomaly, loss_supc = sad_criterion(x, y, model, config, device)
+                    if not loss.requires_grad:
+                        t.set_postfix(skip="no_grad_loss")
+                        t.update(1)
+                        continue
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, norm_type=2)
                     optimizer.step()
@@ -438,8 +464,8 @@ def run_sad(args, data):
                     )
                     t.update(1)
 
-            val_metrics = sad_eval_epoch(loader_valid, model, config, device)
-            test_metrics = sad_eval_epoch(loader_test, model, config, device)
+            val_metrics = sad_eval_epoch(loader_valid, model, config, device, data["dataset_name"])
+            test_metrics = sad_eval_epoch(loader_test, model, config, device, data["dataset_name"])
 
             logger.info(
                 f"epoch {epoch} train loss {np.mean(running_losses) if running_losses else 0.0:.4f} | "

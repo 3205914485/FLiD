@@ -1,6 +1,4 @@
 # FLiD: **F**ramework for **L**abel-L**i**mited **D**ynamic Node Classification
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)](https://pytorch.org/)
 
 This repository is built for the paper
 
@@ -145,9 +143,11 @@ FLiD/
 │   ├── NPL_init.py            # Model initialization
 │   ├── NPL.py                 # Training phase
 │
-├── SEM/                       # Core NPL implementation
+├── SEM/                       # Core SEM implementation
 │   ├── E_step.py              # Expectation phase
 │   ├── M_step.py              # Maximization phase
+│
+├── SAD/                       # Core SAD
 │
 ├── utils/                     # Infrastructure
 │   ├── DataLoader.py          # Dataset processing
@@ -164,27 +164,10 @@ FLiD/
 Framework tracks multiple metrics through `log_and_save_metrics()`:
 ```python
 # Sample metric output
-2025-1-15 14:30:00 - Estep - INFO - Test Metrics:
+2026-1-15 14:30:00 - Estep - INFO - Test Metrics:
 {
     "AUC": 0.892,
     "Accuracy": 0.814,
     "Loss": 0.423
 }
 ```
-
-## 📜 Citation
-If using FLiD in your research, please cite:
-```bibtex
-@article{ptcl2025,
-  title={PTCL: Pseudo-Label Temporal Curriculum Learning for Label-Limited Dynamic Graph},
-  author={Shengtao Zhang, Haokai Zhang, Shiqi Lou, Zicheng Wang, Zinan Zeng, Yilin Wang, Minnan Luo},
-  year={2025}
-}
-``` 
-
-## License
-This project is licensed under the [MIT License](LICENSE).
-
-## 🙏 Acknowledgements
-
-This project makes use of the [DyGLib](https://github.com/yule-BUAA/DyGLib) library for dynamic graph learning. We sincerely thank the authors for providing a solid foundation and well-maintained codebase that greatly facilitated our research and development.
