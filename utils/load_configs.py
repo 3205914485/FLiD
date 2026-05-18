@@ -27,7 +27,7 @@ def get_link_prediction_args(is_evaluation: bool = False):
     parser.add_argument('--start_runs', type=int, default=0, help='number of runs of training starting')
 
     parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='yelp',
-                        choices=['oag', 'wikipedia', 'reddit', 'dsub'])
+                        choices=['oag', 'wikipedia', 'reddit', 'dsub', 'dsub1m'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--model_name', type=str, default='TGAT', help='name of the model, note that EdgeBank is only applicable for evaluation',
                         choices=['TGAT', 'TGN', 'TCL', 'GraphMixer', 'DyGFormer'])
@@ -96,10 +96,10 @@ def get_node_classification_em_args():
     parser = argparse.ArgumentParser('Interface for the node classification task With The EM algorithm')
 
     # Configuration of the experiment
-    parser.add_argument('--method', type=str, default='ptcl', choices=['ptcl', 'sem', 'npl', 'temc', 'ptcl_2d'],help='Which method to be used to train')
-    parser.add_argument('--double_way_datasets', type=list, default = ['dsub','oag'])
+    parser.add_argument('--method', type=str, default='sad', choices=['ptcl', 'sem', 'npl', 'temc', 'ptcl_2d','sad'],help='Which method to be used to train')
+    parser.add_argument('--double_way_datasets', type=list, default = ['dsub','oag', 'dsub1m'])
     parser.add_argument('--prefix',type=str, default='test', help='prefix of work')
-    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['oag', 'reddit','dsub', 'wikipedia'])
+    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['oag', 'reddit','dsub', 'wikipedia', 'dsub1m'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--mmodel_name', type=str, default='TGAT', help='name of the model of dyg backbone',
                         choices=['TGAT', 'TGN','TCL', 'GraphMixer', 'DyGFormer'])
@@ -157,6 +157,19 @@ def get_node_classification_em_args():
     parser.add_argument('--num_epochs_npl', type=int, default=50, help='number of epochs of npl train')
     parser.add_argument('--num_epochs_temc', type=int, default=50, help='number of epochs of temc train')
     parser.add_argument('--consistency_weight', type=float, default=0.1, help='Weight for the temporal consistency loss')
+    parser.add_argument('--num_epochs_sad', type=int, default=30, help='number of epochs of SAD train')
+    parser.add_argument('--sad_mode', type=str, default='sad', choices=['sad', 'gdn'], help='SAD loss composition')
+    parser.add_argument('--sad_module_type', type=str, default='graph_attention', choices=['graph_attention', 'graph_sum'], help='SAD encoder aggregation type')
+    parser.add_argument('--sad_hidden_dim', type=int, default=128, help='hidden dimension for SAD encoder')
+    parser.add_argument('--sad_num_heads', type=int, default=2, help='attention heads for SAD encoder')
+    parser.add_argument('--sad_num_layers', type=int, default=2, help='network layers for SAD encoder')
+    parser.add_argument('--sad_dropout', type=float, default=0.2, help='dropout for SAD encoder')
+    parser.add_argument('--sad_anomaly_alpha', type=float, default=1e-1, help='anomaly loss weight for SAD')
+    parser.add_argument('--sad_supc_alpha', type=float, default=5e-3, help='supervised contrastive loss weight for SAD')
+    parser.add_argument('--sad_memory_size', type=int, default=5000, help='memory size for SAD deviation module')
+    parser.add_argument('--sad_sample_size', type=int, default=2000, help='sample size for SAD deviation module')
+    parser.add_argument('--sad_learning_rate', type=float, default=None, help='learning rate override for SAD')
+    parser.add_argument('--sad_batch_size', type=int, default=None, help='batch size override for SAD')
     # Model specific settings:
 
     parser.add_argument('--num_walk_heads', type=int, default=8, help='number of heads used for the attention in walk encoder')
@@ -181,5 +194,68 @@ def get_node_classification_em_args():
     except:
         parser.print_help()
         sys.exit()
+
+    return args
+
+def get_node_classification_args():
+    """
+    get the args for the node classification task
+    :return:
+    """
+    # arguments
+    parser = argparse.ArgumentParser('Interface for the node classification task')
+    parser.add_argument('--prefix',type=str,help='prefix of work')
+    parser.add_argument('--dataset_name', type=str, help='dataset to be used', default='wikipedia', choices=['arxiv','oag','wikipedia', 'mooc','bot', 'bot22','reddit','rt_wiki','dsub1m','dgraph','yelp'])
+    parser.add_argument('--batch_size', type=int, default=200, help='batch size')
+    parser.add_argument('--model_name', type=str, default='TGAT', help='name of the model',
+                        choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer','M'])
+    parser.add_argument('--gpu', type=int, default=7, help='number of gpu to use')
+    parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')
+    parser.add_argument('--end_runs', type=int, default=1, help='number of runs of training ending')
+    parser.add_argument('--start_runs', type=int, default=0, help='number of runs of training starting')
+    
+    parser.add_argument('--use_ps', type=int, default=0, help='whether use the pseudo labels as labels')       
+    parser.add_argument('--sample_neighbor_strategy', type=str, default='recent', choices=['uniform', 'recent', 'time_interval_aware'], help='how to sample historical neighbors')
+    parser.add_argument('--time_scaling_factor', default=1e-6, type=float, help='the hyperparameter that controls the sampling preference with time interval, '
+                        'a large time_scaling_factor tends to sample more on recent links, 0.0 corresponds to uniform sampling, '
+                        'it works when sample_neighbor_strategy == time_interval_aware')
+    parser.add_argument('--num_walk_heads', type=int, default=8, help='number of heads used for the attention in walk encoder')
+    parser.add_argument('--num_heads', type=int, default=2, help='number of heads used in attention layer')
+    parser.add_argument('--num_layers', type=int, default=1, help='number of model layers')
+    parser.add_argument('--walk_length', type=int, default=1, help='length of each random walk')
+    parser.add_argument('--time_gap', type=int, default=2000, help='time gap for neighbors to compute node features')
+    parser.add_argument('--time_feat_dim', type=int, default=100, help='dimension of the time embedding')
+    parser.add_argument('--position_feat_dim', type=int, default=172, help='dimension of the position embedding')
+    parser.add_argument('--patch_size', type=int, default=1, help='patch size')
+    parser.add_argument('--channel_embedding_dim', type=int, default=50, help='dimension of each channel embedding')
+    parser.add_argument('--max_input_sequence_length', type=int, default=32, help='maximal length of the input sequence of each node')
+    parser.add_argument('--learning_rate', type=float, default=0.0001, help='learning rate')
+    parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
+    parser.add_argument('--num_epochs', type=int, default=200, help='number of epochs')
+    parser.add_argument('--optimizer', type=str, default='Adam', choices=['SGD', 'Adam', 'RMSprop'], help='name of optimizer')
+    parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay')
+    parser.add_argument('--patience', type=int, default=20, help='patience for early stopping')
+    parser.add_argument('--val_ratio', type=float, default=0.15, help='ratio of validation set')
+    parser.add_argument('--test_ratio', type=float, default=0.15, help='ratio of test set')
+    parser.add_argument('--num_runs', type=int, default=5, help='number of runs')
+    parser.add_argument('--test_interval_epochs', type=int, default=10, help='how many epochs to perform testing once')
+    parser.add_argument('--load_best_configs', action='store_true', default=False, help='whether to load the best configurations')
+    parser.add_argument('--mf', type=str, default='te', choices=['te','sa','id','mlp'],help='message_function to use')
+    parser.add_argument('--encoders', type=int, default=1, help='num_encoders')
+    parser.add_argument('--dff', type=int, default=172, help='dense_size')    
+    parser.add_argument('--sa_att_heads', type=int, default=4, help='num_sam_heads')
+    parser.add_argument('--sa_hidden_size', type=int, default=512, help='num_sam_hidden_size')    
+    parser.add_argument('--cw',type=float,default=1,help='the class weight for the negative sample')
+    parser.add_argument('--new_spilt', type=bool, default=True, help='new_split for node_classification dataset')
+
+    try:
+        args = parser.parse_args()
+        args.device = f'cuda:{args.gpu}' if torch.cuda.is_available() and args.gpu >= 0 else 'cpu'
+    except:
+        parser.print_help()
+        sys.exit()
+
+    if args.load_best_configs:
+        load_node_classification_best_configs(args=args)
 
     return args

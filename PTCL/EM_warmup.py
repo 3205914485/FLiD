@@ -33,7 +33,7 @@ def em_warmup(args, data, logger, Mtrainer: Trainer, Etrainer: Trainer, src_node
     src_node_embeddings.copy_(new_src_embeddings)
     dst_node_embeddings.copy_(new_dst_embeddings)
     logger.info("Warm-up-2 : Start training node classification for decoder\n")
-    if args.mmodel_name =='mlp':
+    if args.emodel_name =='mlp':
         save_model_name = f'ptcl_{Mtrainer.model_name}'
     else:
         save_model_name = f'ptcl_{Mtrainer.model_name}_{Etrainer.model_name}'
@@ -98,8 +98,8 @@ def link_prediction(args, Mtrainer, data, logger):
     # Considering here we do not only train the dyg_backbone , so we create optimizer for the whole model instead of using Trainer.optimizer
     optimizer = create_optimizer(model=model, optimizer_name=args.optimizer,
                                  learning_rate=args.learning_rate, weight_decay=args.weight_decay)
-    save_model_name = f'ptcl_{model_name}'
-    save_model_folder = f"./saved_models/ptcl/m/warmup/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    save_model_name = f'{model_name}_seed{args.seed}'
+    save_model_folder = f"./saved_models/{model_name}/{args.dataset_name}/{save_model_name}/"
     # shutil.rmtree(save_model_folder, ignore_errors=True)
     if not os.path.exists(save_model_folder):
         os.makedirs(save_model_folder, exist_ok=True)

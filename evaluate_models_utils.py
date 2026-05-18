@@ -14,7 +14,7 @@ from utils.utils import set_random_seed
 from utils.utils import NegativeEdgeSampler, NeighborSampler
 from utils.DataLoader import Data
 
-double_way_datasets = ['dsub','oag']
+double_way_datasets = ['dsub','oag','dsub1m']
 
 def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader,
                                    evaluate_neg_edge_sampler: NegativeEdgeSampler, evaluate_data: Data, loss_func: nn.Module,
@@ -241,7 +241,7 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
             if dataset in double_way_datasets:
                 predicts = model[1](x=torch.cat([batch_src_node_embeddings,batch_dst_node_embeddings],dim=0)).squeeze(dim=-1)
                 labels = torch.from_numpy(np.concatenate([batch_labels[0],batch_labels[1]],axis=0)).to(torch.long).to(predicts.device)
-                if dataset == 'dsub': 
+                if dataset == 'dsub' or dataset == 'dsub1m': 
                     mask_gt_src = torch.from_numpy(
                         (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                     mask_gt_dst = torch.from_numpy(

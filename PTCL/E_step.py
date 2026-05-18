@@ -64,7 +64,7 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.from_numpy(np.concatenate(
                     [batch_labels[0], batch_labels[1]], axis=0)).long().to(predicts.device)
-                if dataset == 'dsub':
+                if dataset in ['dsub','dsub1m']:
                     mask_gt_src = torch.from_numpy(
                         (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                     mask_gt_dst = torch.from_numpy(
@@ -174,7 +174,7 @@ def train_model_node_classification_withembeddings(args, Mtrainer, Etrainer, dat
                         [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                     labels = torch.from_numpy(np.concatenate(
                         [batch_labels[0], batch_labels[1]], axis=0)).to(torch.long).to(predicts.device)
-                    if args.dataset_name == 'dsub':
+                    if args.dataset_name in ['dsub', 'dsub1m']:
                         mask_gt_src = torch.from_numpy(
                             (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                         mask_gt_dst = torch.from_numpy(
