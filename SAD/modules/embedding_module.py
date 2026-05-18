@@ -3,8 +3,8 @@ from torch import nn
 import numpy as np
 import math
 
-from SAD.modules.temporal_attention import TemporalAttentionLayer2
-from SAD.modules.temporal_sum import TemporalSumLayer
+from modules.temporal_attention import TemporalAttentionLayer2
+from modules.temporal_sum import TemporalSumLayer
 
 
 

@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_scatter as scatter
-from SAD.modules.utils import MergeLayer_output, Feat_Process_Layer, drop_edge
-from SAD.modules.embedding_module import get_embedding_module
-from SAD.modules.time_encoding import TimeEncode
-from SAD.model.gdn import graph_deviation_network
-from SAD.model.supconloss import SupConLoss
+from modules.utils import MergeLayer_output, Feat_Process_Layer, drop_edge
+from modules.embedding_module import get_embedding_module
+from modules.time_encoding import TimeEncode
+from model.gdn import graph_deviation_network
+from model.supconloss import SupConLoss
 
 
 class TGAT(torch.nn.Module):
