@@ -12,15 +12,15 @@ import torch.nn as nn
 
 from utils.utils import set_random_seed
 from utils.utils import get_neighbor_sampler
-from utils.DataLoader import get_idx_data_loader, get_PTCL_data
+from utils.DataLoader import get_idx_data_loader, get_cat_em_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_em_args
 
-from PTCL.EM_init import em_init
-from PTCL.EM_warmup import em_warmup
-from PTCL.M_step import m_step
-from PTCL.E_step import e_step
-from PTCL.utils import log_and_save_metrics, save_results, update_pseudo_labels
+from cat_em.EM_init import em_init
+from cat_em.EM_warmup import em_warmup
+from cat_em.M_step import m_step
+from cat_em.E_step import e_step
+from cat_em.utils import log_and_save_metrics, save_results, update_pseudo_labels
 
 from SEM.E_step import sem_e_step
 from SEM.M_step import sem_m_step
@@ -37,7 +37,7 @@ os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
 os.environ["MKL_NUM_THREADS"] = str(cpu_num)  # noqa
 torch.set_num_threads(cpu_num)
 
-def PTCL(args, data):
+def CAT_EM(args, data):
     
     for run in range(args.start_runs, args.end_runs):
 
@@ -50,10 +50,10 @@ def PTCL(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/{args.method}/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/ptcl/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/{args.method}/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -72,7 +72,7 @@ def PTCL(args, data):
 
         logger.info(f'configuration is {args}')
 
-        # PTCL strating:
+        # CAT-EM starting:
 
         # EM data:
         pseudo_labels_save_path = f"processed_data/{args.dataset_name}/pseudo_labels/{args.emodel_name}/{args.seed}/"
@@ -134,8 +134,8 @@ def PTCL(args, data):
             continue
         # EM training
         model_name = Mtrainer.model_name
-        save_model_name = f'ptcl_{model_name}'
-        save_model_folder = f"./saved_models/ptcl/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+        save_model_name = f'{args.method}_{model_name}'
+        save_model_folder = f"./saved_models/{args.method}/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
         shutil.rmtree(save_model_folder, ignore_errors=True)
         os.makedirs(save_model_folder, exist_ok=True)
         early_stopping = EarlyStopping(patience=args.iter_patience, save_model_folder=save_model_folder,
@@ -423,7 +423,7 @@ def NPL(args, data):
 
         logger.info(f'configuration is {args}')
 
-        # PTCL strating:
+        # NPL starting:
 
         # EM data:
         pseudo_labels_save_path = f"processed_data/{args.dataset_name}/npl/pseudo_labels/{args.emodel_name}/{args.seed}/"
@@ -555,7 +555,7 @@ def Temc(args, data):
 
         logger.info(f'configuration is {args}')
 
-        # PTCL strating:
+        # TemC starting:
 
         # EM data:
         pseudo_labels_save_path = f"processed_data/{args.dataset_name}/temc/pseudo_labels/{args.emodel_name}/{args.seed}/"
@@ -652,7 +652,7 @@ def Temc(args, data):
         # No E-step for temc
     return best_test_all
 
-def PTCL_2D(args, data):
+def CAT_EM_2D(args, data):
     
     args.decoder = 2
     for run in range(args.start_runs, args.end_runs):
@@ -666,10 +666,10 @@ def PTCL_2D(args, data):
         logger = logging.getLogger()
         logger.setLevel(logging.DEBUG)
         os.makedirs(
-            f"./logs/ptcl_2d/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
+            f"./logs/{args.method}/{args.prefix}/{args.dataset_name}/seed_{args.seed}/", exist_ok=True)
         # create file handler that logs debug and higher level messages
         fh = logging.FileHandler(
-            f"./logs/ptcl_2d/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
+            f"./logs/{args.method}/{args.prefix}/{args.dataset_name}/seed_{args.seed}/{str(time.time())}.log")
         fh.setLevel(logging.DEBUG)
         # create console handler with a higher log level
         ch = logging.StreamHandler()
@@ -688,7 +688,7 @@ def PTCL_2D(args, data):
 
         logger.info(f'configuration is {args}')
 
-        # ptcl_2d strating:
+        # CAT-EM-2D starting:
 
         # EM data:
         pseudo_labels_save_path = f"processed_data/{args.dataset_name}/pseudo_labels/{args.emodel_name}/{args.seed}/"
@@ -751,8 +751,8 @@ def PTCL_2D(args, data):
 
         # EM training
         model_name = Mtrainer.model_name
-        save_model_name = f'ptcl_{model_name}'
-        save_model_folder = f"./saved_models/ptcl_2d/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+        save_model_name = f'{args.method}_{model_name}'
+        save_model_folder = f"./saved_models/{args.method}/EM/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
         shutil.rmtree(save_model_folder, ignore_errors=True)
         os.makedirs(save_model_folder, exist_ok=True)
         early_stopping = EarlyStopping(patience=args.iter_patience, save_model_folder=save_model_folder,
@@ -836,7 +836,7 @@ if __name__ == "__main__":
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, \
         num_node_features, val_offest, test_offest, train_nodes, test_nodes, num_classes, ps_batch_mask = \
-        get_PTCL_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
+        get_cat_em_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt, iter_patience=args.iter_patience)
     args.num_classes = num_classes
     # initialize validation and test neighbor sampler to retrieve temporal graph
@@ -873,16 +873,16 @@ if __name__ == "__main__":
         "ps_batch_mask": ps_batch_mask
     }
 
-    if args.method == 'ptcl':
-        best_test_all = PTCL(args, data)
+    if args.method == 'cat-em':
+        best_test_all = CAT_EM(args, data)
     elif args.method == 'sem':
         best_test_all = SEM(args, data)
     elif args.method == 'npl':
         best_test_all = NPL(args, data)
     elif args.method == 'temc':
         best_test_all = Temc(args, data)
-    elif args.method == 'ptcl_2d':
-        best_test_all = PTCL_2D(args, data)
+    elif args.method == 'cat-em-2d':
+        best_test_all = CAT_EM_2D(args, data)
     elif args.method == 'sad':
         best_test_all = run_sad(args, data)
     else:

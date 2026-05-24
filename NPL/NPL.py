@@ -11,7 +11,7 @@ from utils.utils import  NeighborSampler
 from utils.DataLoader import Data
 from utils.EarlyStopping import EarlyStopping
 
-from PTCL.trainer import Trainer
+from cat_em.trainer import Trainer
 
 def evaluate_model_node_classification_npl(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
                                               evaluate_data: Data, loss_func: nn.Module, pseudo_labels: torch.tensor, num_neighbors: int = 20, time_gap: int = 2000, ps_filter: str = 'none',  double_way_datasets: list=[]):
@@ -97,7 +97,7 @@ def evaluate_model_node_classification_npl(model_name: str, model: nn.Module, da
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
                 labels_gt = torch.cat([torch.from_numpy(batch_gt[0]), torch.from_numpy(batch_gt[1])], axis=0).to(torch.long).to(predicts.device).squeeze(dim=-1)
-                if dataset == 'dsub':
+                if dataset in ['dsub','dsub1m']:
                     mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0], [0, 1])).to(torch.bool)
                     mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1], [0, 1])).to(torch.bool)
                 else:
@@ -253,7 +253,7 @@ def NPL_train(Dirtrainer: Trainer, gt_weight, data, pseudo_labels, args, logger,
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
                 batch_ps_mask = args.iter_patience - torch.cat(batch_ps_mask, dim=0)
-                if args.dataset_name == 'dsub':
+                if args.dataset_name in ['dsub','dsub1m']:
                     mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0], [0, 1])).to(torch.bool)
                     mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1], [0, 1])).to(torch.bool)
                 else:

@@ -3,7 +3,7 @@ import torch_scatter as scatter
 from torch import nn
 import torch.nn.functional as F
 
-from modules.utils import MergeLayer
+from SAD.modules.utils import MergeLayer
 
 class TemporalSumLayer(torch.nn.Module):
   """
@@ -117,4 +117,3 @@ class TemporalSumLayer(torch.nn.Module):
     edge_time = edge_time[retain_index]
 
     return edge_index, edge_feature, src_time_features, edge_time
-

@@ -1,8 +1,10 @@
 # FLiD: **F**ramework for **L**abel-L**i**mited **D**ynamic Node Classification
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)](https://pytorch.org/)
 
 This repository is built for the paper
 
-PTCL: Pseudo-Label Temporal Curriculum Learning for Label-Limited Dynamic Graph
+CAT-EM: Clean-Anchor Temporal EM for Label-Limited Dynamic Graphs
 
 FLiD is a novel framework for dynamic graph learning where only final timestamp labels are available. Designed for extensibility and fairness, it supports cutting-edge research in temporal graph analysis through:
 
@@ -18,8 +20,8 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
     * DLS (Dynamic Label Supervision)
     * NPL (Naive Pseudo-Labels) 
     * SEM (Standard EM) 
-    * PTCL-2D (PTCL with 2 Decoders) 
-    * PTCL
+    * CAT-EM-2D (CAT-EM with 2 Decoders)
+    * CAT-EM
   ![Methods](images/methods.png)
   * Support for below pseudo-labels enhancement methods:
     * Confidence Score Threshold (CST)
@@ -63,7 +65,7 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
   - **Step 1: Warmup**
 
     1. Configure the following parameters for the warmup training:
-    - `method`: Choose the method (e.g., `ptcl`) 
+    - `method`: Choose the method (e.g., `cat-em`)
     - `mmodel_name`: Choose the model-backbone (e.g., `TGAT`)
     - `gpu`: Specify the GPU to use (e.g., `0`)
     - `dataset_name`: Choose the dataset (e.g., `reddit` or `wikipedia`) 
@@ -80,7 +82,7 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
   - **Step 2: Train**
 
     1. Configure the following parameters for training:
-    - `method`: Choose the training method (e.g., `ptcl`, `sem`, `npl`)
+    - `method`: Choose the training method (e.g., `cat-em`, `sem`, `npl`)
     - `dataset_name`: Choose the dataset (e.g., `reddit`, `wikipedia`, `oag`)
     - `gt_weight`: gourd-truth label weight ($\beta$ in the paper) (e.g., `0.5`)
     - `alpha`: Exp decay for Temporal Curriculum learning ($\gamma$ in the paper)(e.g., `0.1`)
@@ -116,8 +118,8 @@ FLiD is a novel framework for dynamic graph learning where only final timestamp 
 | **DLS**      | None     | Full Supervision          | With dynamic labels             |
 | **NPL**      | None     | Joint Optimization with generated pseudo-labels       | Single-phase training               |
 | **SEM**      | Full  | 2-stage generate pseudo-labels          | Standard EM Implementation          |
-| **PTCL**     | Full     | E-step generate pseudo-labels       | Dual-phase EM + Temporal Filtering  |
-| **PTCL-2D**  | Full     | Dual-Decoder Architecture | Prevents confirmation bias          |
+| **CAT-EM**     | Full     | E-step generate pseudo-labels       | Clean-anchor EM + Temporal Filtering  |
+| **CAT-EM-2D**  | Full     | Dual-Decoder Architecture | Prevents confirmation bias          |
 
 
 ## 📂 Repository Structure
@@ -131,7 +133,7 @@ FLiD/
 ├── saved_models/              # Model checkpoints
 ├── processed_data/            # Preprocessed datasets
 │
-├── PTCL/                      # Core EM implementation
+├── cat_em/                    # CAT-EM core implementation
 │   ├── EM_init.py             # Model initialization
 │   ├── EM_warmup.py           # Model warmup
 │   ├── E_step.py              # Expectation phase
@@ -143,11 +145,9 @@ FLiD/
 │   ├── NPL_init.py            # Model initialization
 │   ├── NPL.py                 # Training phase
 │
-├── SEM/                       # Core SEM implementation
+├── SEM/                       # Core NPL implementation
 │   ├── E_step.py              # Expectation phase
 │   ├── M_step.py              # Maximization phase
-│
-├── SAD/                       # Core SAD
 │
 ├── utils/                     # Infrastructure
 │   ├── DataLoader.py          # Dataset processing
@@ -164,10 +164,27 @@ FLiD/
 Framework tracks multiple metrics through `log_and_save_metrics()`:
 ```python
 # Sample metric output
-2026-1-15 14:30:00 - Estep - INFO - Test Metrics:
+2025-1-15 14:30:00 - Estep - INFO - Test Metrics:
 {
     "AUC": 0.892,
     "Accuracy": 0.814,
     "Loss": 0.423
 }
 ```
+
+## 📜 Citation
+If using FLiD in your research, please cite:
+```bibtex
+@article{catem2026,
+  title={CAT-EM: Clean-Anchor Temporal EM for Label-Limited Dynamic Graphs},
+  author={Shengtao Zhang, Haokai Zhang, Shiqi Lou, Zicheng Wang, Zinan Zeng, Yilin Wang, Minnan Luo},
+  year={2026}
+}
+```
+
+## License
+This project is licensed under the [MIT License](LICENSE).
+
+## 🙏 Acknowledgements
+
+This project makes use of the [DyGLib](https://github.com/yule-BUAA/DyGLib) library for dynamic graph learning. We sincerely thank the authors for providing a solid foundation and well-maintained codebase that greatly facilitated our research and development.

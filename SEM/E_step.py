@@ -30,7 +30,7 @@ from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_link_prediction_args
 from models.modules import MergeLayer
 
-from PTCL.trainer import Trainer
+from cat_em.trainer import Trainer
 
 def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset: str, src_node_embeddings: torch.tensor,
                                                       dst_node_embeddings: torch.tensor, evaluate_idx_data_loader: DataLoader,
@@ -64,7 +64,7 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.from_numpy(np.concatenate(
                     [batch_labels[0], batch_labels[1]], axis=0)).long().to(predicts.device)
-                if dataset == 'dsub':
+                if dataset in ['dsub','dsub1m']:
                     mask_gt_src = torch.from_numpy(
                         (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                     mask_gt_dst = torch.from_numpy(
@@ -177,7 +177,7 @@ def train_model_node_classification_withembeddings(args, Mtrainer, gt_weight, Et
                     labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                         torch.long).to(predicts.device).squeeze(dim=-1)
                     batch_ps_mask = args.iter_patience - torch.cat(batch_ps_mask, dim=0)
-                    if args.dataset_name == 'dsub':
+                    if args.dataset_name in ['dsub','dsub1m']:
                         mask_nodes_src = torch.from_numpy(
                             np.isin(batch_gt[0], [0, 1])).to(torch.bool)
                         mask_nodes_dst = torch.from_numpy(

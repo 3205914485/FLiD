@@ -14,7 +14,7 @@ from utils.utils import set_random_seed
 from utils.utils import NegativeEdgeSampler, NeighborSampler
 from utils.DataLoader import Data
 
-double_way_datasets = ['dsub','oag']
+double_way_datasets = ['dsub','oag','dsub1m']
 
 def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader,
                                    evaluate_neg_edge_sampler: NegativeEdgeSampler, evaluate_data: Data, loss_func: nn.Module,
@@ -227,7 +227,7 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
                                                                       node_interact_times=batch_node_interact_times,
                                                                       message_idx=batch_edge_ids,
                                                                       num_neighbors=num_neighbors,
-                                                                      time_gap=time_gap)                
+                                                                      time_gap=time_gap)
             elif model_name in ['DyGFormer']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
@@ -241,7 +241,7 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
             if dataset in double_way_datasets:
                 predicts = model[1](x=torch.cat([batch_src_node_embeddings,batch_dst_node_embeddings],dim=0)).squeeze(dim=-1)
                 labels = torch.from_numpy(np.concatenate([batch_labels[0],batch_labels[1]],axis=0)).to(torch.long).to(predicts.device)
-                if dataset == 'dsub': 
+                if dataset == 'dsub' or dataset == 'dsub1m':
                     mask_gt_src = torch.from_numpy(
                         (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                     mask_gt_dst = torch.from_numpy(
@@ -250,14 +250,14 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
                     mask_gt_src = torch.from_numpy(
                         (batch_node_interact_times == batch_labels_times[0])).to(torch.bool)
                     mask_gt_dst = torch.from_numpy(
-                        (batch_node_interact_times == batch_labels_times[1])).to(torch.bool) 
+                        (batch_node_interact_times == batch_labels_times[1])).to(torch.bool)
                 mask = torch.cat([mask_gt_src, mask_gt_dst],dim=0).squeeze(dim=-1)
             else :
                 predicts = model[1](x=batch_src_node_embeddings).squeeze(dim=-1)
-                labels = torch.from_numpy(batch_labels).to(torch.long).to(predicts.device) 
+                labels = torch.from_numpy(batch_labels).to(torch.long).to(predicts.device)
                 mask = torch.from_numpy(batch_node_interact_times == batch_labels_times).to(torch.bool)
-            
-        
+
+
             filtered_predicts = predicts[mask]
             filtered_labels = labels[mask]
 
@@ -265,7 +265,7 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
                 loss = loss_func(input=filtered_predicts, target=filtered_labels)
                 loss_value = loss.item()
             else:
-                loss = torch.tensor(0.0) 
+                loss = torch.tensor(0.0)
                 loss_value = 0.0
 
             evaluate_total_loss += loss_value
@@ -278,7 +278,7 @@ def evaluate_model_node_classification(model_name: str, model: nn.Module, datase
         evaluate_y_trues = torch.cat(evaluate_y_trues, dim=0)
         evaluate_y_predicts = torch.cat(evaluate_y_predicts, dim=0)
         evaluate_metrics = get_node_classification_metrics(predicts=evaluate_y_predicts, labels=evaluate_y_trues)
-        
+
 
     return evaluate_total_loss, evaluate_metrics
 

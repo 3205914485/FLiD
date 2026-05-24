@@ -30,7 +30,7 @@ from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_link_prediction_args
 from models.modules import MergeLayer
 
-from PTCL.trainer import Trainer
+from cat_em.trainer import Trainer
 
 def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset: str, src_node_embeddings: torch.tensor,
                                                       dst_node_embeddings: torch.tensor, evaluate_idx_data_loader: DataLoader,
@@ -64,7 +64,7 @@ def evaluate_model_node_classification_withembeddings(model: nn.Module, dataset:
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.from_numpy(np.concatenate(
                     [batch_labels[0], batch_labels[1]], axis=0)).long().to(predicts.device)
-                if dataset == 'dsub':
+                if dataset in ['dsub','dsub1m']:
                     mask_gt_src = torch.from_numpy(
                         (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                     mask_gt_dst = torch.from_numpy(
@@ -126,7 +126,7 @@ def train_model_node_classification_withembeddings(args, Mtrainer, Etrainer, dat
     model = Etrainer.model[1]
     optimizer = Etrainer.optimizer
     model_name = Etrainer.model_name
-    save_model_name = f'ptcl_{model_name}'
+    save_model_name = f'{args.method}_{model_name}'
     # shutil.rmtree(save_model_folder, ignore_errors=True)
     if not os.path.exists(save_model_folder):
         os.makedirs(save_model_folder, exist_ok=True)
@@ -174,7 +174,7 @@ def train_model_node_classification_withembeddings(args, Mtrainer, Etrainer, dat
                         [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                     labels = torch.from_numpy(np.concatenate(
                         [batch_labels[0], batch_labels[1]], axis=0)).to(torch.long).to(predicts.device)
-                    if args.dataset_name == 'dsub':
+                    if args.dataset_name in ['dsub', 'dsub1m']:
                         mask_gt_src = torch.from_numpy(
                             (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                         mask_gt_dst = torch.from_numpy(
@@ -355,8 +355,8 @@ def train_model_node_classification_withembeddings(args, Mtrainer, Etrainer, dat
 
 def e_step(Mtrainer, Etrainer, data, args, logger, src_node_embeddings, dst_node_embeddings, pseudo_labels, pseudo_labels_store):
     logger.info("Starting e-step \n")
-    save_model_name = f'ptcl_{Mtrainer.model_name}'
-    save_model_folder = f"./saved_models/ptcl/e/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
+    save_model_name = f'{args.method}_{Mtrainer.model_name}'
+    save_model_folder = f"./saved_models/{args.method}/e/{args.prefix}/{args.dataset_name}/{args.seed}/{save_model_name}/"
     val_total_loss, val_metrics, test_total_loss, test_metrics = \
         train_model_node_classification_withembeddings(args=args,
                                                        data=data,

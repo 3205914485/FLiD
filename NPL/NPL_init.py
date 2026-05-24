@@ -6,7 +6,7 @@ from models.DyGFormer import DyGFormer
 from models.modules import MLPClassifier, MLPClassifier_BN
 from utils.utils import convert_to_gpu
 from torch import nn
-from PTCL.trainer import Trainer
+from cat_em.trainer import Trainer
 
 
 def NPL_init(args, node_raw_features, edge_raw_features, train_data, full_neighbor_sampler, logger):

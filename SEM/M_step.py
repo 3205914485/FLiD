@@ -12,7 +12,7 @@ from utils.utils import NeighborSampler
 from utils.DataLoader import Data
 from utils.EarlyStopping import EarlyStopping
 
-from PTCL.trainer import Trainer
+from cat_em.trainer import Trainer
 
 
 def evaluate_model_node_classification_m_step(model_name: str, model: nn.Module, dataset: str, neighbor_sampler: NeighborSampler, evaluate_idx_data_loader: DataLoader, offest: int,
@@ -99,7 +99,7 @@ def evaluate_model_node_classification_m_step(model_name: str, model: nn.Module,
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
                 labels_gt = torch.cat([torch.from_numpy(batch_gt[0]), torch.from_numpy(batch_gt[1])], axis=0).to(torch.long).to(predicts.device).squeeze(dim=-1)
-                if dataset == 'dsub':
+                if dataset in ['dsub','dsub1m']:
                     mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0], [0, 1])).to(torch.bool)
                     mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1], [0, 1])).to(torch.bool)
                 else:
@@ -263,7 +263,7 @@ def sem_m_step(Mtrainer: Trainer, Etrainer: Trainer, gt_weight, data, pseudo_lab
                 labels = torch.cat([batch_labels[0], batch_labels[1]], axis=0).to(
                     torch.long).to(predicts.device).squeeze(dim=-1)
                 batch_ps_mask = args.iter_patience - torch.cat(batch_ps_mask, dim=0)
-                if args.dataset_name == 'dsub':
+                if args.dataset_name in ['dsub','dsub1m']:
                     mask_nodes_src = torch.from_numpy(np.isin(batch_gt[0], [0, 1])).to(torch.bool)
                     mask_nodes_dst = torch.from_numpy(np.isin(batch_gt[1], [0, 1])).to(torch.bool)
                 else:
@@ -529,4 +529,3 @@ def sem_m_step(Mtrainer: Trainer, Etrainer: Trainer, gt_weight, data, pseudo_lab
     src_node_embeddings.copy_(new_src_embeddings)
     dst_node_embeddings.copy_(new_dst_embeddings)
     return val_total_loss, val_metrics, test_total_loss, test_metrics
-

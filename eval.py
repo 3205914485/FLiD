@@ -13,15 +13,15 @@ import torch.nn as nn
 
 from utils.utils import set_random_seed
 from utils.utils import get_neighbor_sampler
-from utils.DataLoader import get_idx_data_loader, get_PTCL_data
+from utils.DataLoader import get_idx_data_loader, get_cat_em_data
 from utils.EarlyStopping import EarlyStopping
 from utils.load_configs import get_node_classification_em_args
 from utils.metrics import get_node_classification_metrics_em
 from tqdm import tqdm
 
-from PTCL.EM_init import em_init
-from PTCL.utils import log_and_save_metrics, save_results, update_pseudo_labels
-from PTCL.E_step import evaluate_model_node_classification_withembeddings
+from cat_em.EM_init import em_init
+from cat_em.utils import log_and_save_metrics, save_results, update_pseudo_labels
+from cat_em.E_step import evaluate_model_node_classification_withembeddings
 
 cpu_num = 2
 os.environ["OMP_NUM_THREADS"] = str(cpu_num)  # noqa
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, num_interactions, \
         num_node_features, val_offest, test_offest, train_nodes, test_nodes, num_classes, ps_batch_mask = \
-        get_PTCL_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
+        get_cat_em_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio,
                       test_ratio=args.test_ratio, new_spilt=args.new_spilt, iter_patience=args.iter_patience)
     args.num_classes = num_classes
     # initialize validation and test neighbor sampler to retrieve temporal graph
@@ -221,7 +221,7 @@ if __name__ == "__main__":
                     [batch_src_node_embeddings, batch_dst_node_embeddings], dim=0))
                 labels = torch.from_numpy(np.concatenate(
                     [batch_labels[0], batch_labels[1]], axis=0)).to(torch.long).to(predicts.device)
-                if args.dataset_name == 'dsub':
+                if args.dataset_name == 'dsub' or args.dataset_name == 'dsub1m':
                     mask_gt_src = torch.from_numpy(
                         (batch_node_interact_times == batch_labels_times[0]) & (np.isin(batch_labels[0],[0,1]))).to(torch.bool)
                     mask_gt_dst = torch.from_numpy(

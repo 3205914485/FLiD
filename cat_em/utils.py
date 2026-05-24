@@ -27,7 +27,7 @@ def save_results(args, Mtrainer, Eval_metric_dict, Etest_metric_dict, Mval_metri
         }
     result_json = json.dumps(result_json, indent=4)
 
-    save_result_folder = f"./saved_results/ptcl/{args.prefix}/{run}/{args.dataset_name}"
+    save_result_folder = f"./saved_results/{args.method}/{args.prefix}/{run}/{args.dataset_name}"
     os.makedirs(save_result_folder, exist_ok=True)
     save_result_path = os.path.join(
         save_result_folder, f"{args.emodel_name}_{args.mmodel_name}.json")

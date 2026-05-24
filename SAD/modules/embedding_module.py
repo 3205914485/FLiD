@@ -3,8 +3,8 @@ from torch import nn
 import numpy as np
 import math
 
-from modules.temporal_attention import TemporalAttentionLayer2
-from modules.temporal_sum import TemporalSumLayer
+from SAD.modules.temporal_attention import TemporalAttentionLayer2
+from SAD.modules.temporal_sum import TemporalSumLayer
 
 
 
@@ -153,5 +153,4 @@ def get_embedding_module(module_type, time_encoder, n_layers,
 
   else:
     raise ValueError("Embedding Module {} not supported".format(module_type))
-
 
