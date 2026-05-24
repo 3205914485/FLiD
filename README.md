@@ -1,6 +1,4 @@
 # FLiD: **F**ramework for **L**abel-L**i**mited **D**ynamic Node Classification
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)](https://pytorch.org/)
 
 This repository is built for the paper
 
@@ -171,20 +169,3 @@ Framework tracks multiple metrics through `log_and_save_metrics()`:
     "Loss": 0.423
 }
 ```
-
-## 📜 Citation
-If using FLiD in your research, please cite:
-```bibtex
-@article{catem2026,
-  title={CAT-EM: Clean-Anchor Temporal EM for Label-Limited Dynamic Graphs},
-  author={Shengtao Zhang, Haokai Zhang, Shiqi Lou, Zicheng Wang, Zinan Zeng, Yilin Wang, Minnan Luo},
-  year={2026}
-}
-```
-
-## License
-This project is licensed under the [MIT License](LICENSE).
-
-## 🙏 Acknowledgements
-
-This project makes use of the [DyGLib](https://github.com/yule-BUAA/DyGLib) library for dynamic graph learning. We sincerely thank the authors for providing a solid foundation and well-maintained codebase that greatly facilitated our research and development.
